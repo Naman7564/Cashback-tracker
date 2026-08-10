@@ -133,11 +133,14 @@ async function loadSources() {
             return;
         }
         container.innerHTML = sources.map(src => `
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-center justify-between" style="border-left: 4px solid ${src.color}">
-            <div class="min-w-0">
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${src.color}"></div>
+                <div class="min-w-0">
                 <p class="text-sm font-semibold text-slate-800">${src.name}</p>
                 <p class="text-xs text-slate-500">${src.provider} · ${src.source_type.toUpperCase()}${src.network ? ' · ' + src.network : ''}</p>
                 <p class="text-xs font-medium text-emerald-600 mt-1">Earned: ₹${Number(src.total_earned || 0).toLocaleString('en-IN')}</p>
+                </div>
             </div>
             <div class="flex items-center gap-3 flex-shrink-0">
                 <label class="relative inline-flex items-center cursor-pointer">
