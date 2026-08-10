@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cashback Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+                        emerald: { 50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669', 700: '#047857' },
+                        amber: { 50: '#fffbeb', 100: '#fef3c7', 500: '#f59e0b', 600: '#d97706', 700: '#b45309' },
+                        rose: { 50: '#fff1f2', 100: '#ffe4e6', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: #f8fafc; overscroll-behavior: none; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
+        .modal-overlay { background: rgba(0,0,0,0.5); }
+        input, select, textarea { font-size: 16px !important; } /* Prevent iOS zoom */
+    </style>
+</head>
+<body class="bg-slate-50 max-w-lg mx-auto relative min-h-screen pb-20">
+
+    <!-- ===== HOME PAGE ===== -->
+    <div id="page-home" class="page active">
+        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10">
+            <h1 class="text-xl font-semibold text-slate-800">Cashback Tracker</h1>
+        </header>
+        <main class="px-4 py-4 space-y-4">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending</p>
+                    <p id="stat-pending" class="text-2xl font-bold text-amber-600 mt-1">₹0</p>
+                </div>
+                <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Sources</p>
+                    <p id="stat-sources" class="text-2xl font-bold text-primary-600 mt-1">0</p>
+                </div>
+            </div>
+            <!-- Quick Stats -->
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Earned This Month</p>
+                        <p id="stat-earned" class="text-lg font-semibold text-emerald-600 mt-0.5">₹0</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Best Source</p>
+                        <p id="stat-best" class="text-sm font-medium text-slate-700 mt-0.5">—</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Recent Transactions -->
+            <div>
+                <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-2">Recent Transactions</h2>
+                <div id="recent-transactions" class="space-y-2">
+                    <p class="text-sm text-slate-400 py-8 text-center">No transactions yet</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== TRANSACTIONS PAGE ===== -->
+    <div id="page-transactions" class="page">
+        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10">
+            <h1 class="text-xl font-semibold text-slate-800">Transactions</h1>
+            <!-- Filters -->
+            <div class="flex gap-2 mt-2 overflow-x-auto pb-1">
+                <select id="filter-month" class="text-xs bg-slate-100 rounded-lg px-3 py-1.5 border-0 font-medium text-slate-600">
+                    <option value="">All Months</option>
+                </select>
+                <select id="filter-status" class="text-xs bg-slate-100 rounded-lg px-3 py-1.5 border-0 font-medium text-slate-600">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="received">Received</option>
+                    <option value="disputed">Disputed</option>
+                </select>
+                <select id="filter-source" class="text-xs bg-slate-100 rounded-lg px-3 py-1.5 border-0 font-medium text-slate-600">
+                    <option value="">All Sources</option>
+                </select>
+            </div>
+        </header>
+        <main class="px-4 py-3">
+            <div id="transaction-list" class="space-y-2">
+                <p class="text-sm text-slate-400 py-8 text-center">No transactions</p>
+            </div>
+            <div id="load-more-txn" class="py-4 text-center hidden">
+                <button onclick="loadMoreTransactions()" class="text-sm text-primary-600 font-medium">Load More</button>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== CARDS PAGE ===== -->
+    <div id="page-cards" class="page">
+        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10 flex justify-between items-center">
+            <h1 class="text-xl font-semibold text-slate-800">Cards & UPI</h1>
+            <button onclick="openSourceModal()" class="text-sm bg-primary-600 text-white px-3 py-1.5 rounded-lg font-medium">+ Add</button>
+        </header>
+        <main class="px-4 py-3">
+            <div id="source-list" class="space-y-3">
+                <p class="text-sm text-slate-400 py-8 text-center">No payment sources</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== OFFERS PAGE ===== -->
+    <div id="page-offers" class="page">
+        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10 flex justify-between items-center">
+            <h1 class="text-xl font-semibold text-slate-800">Offers</h1>
+            <button onclick="openOfferModal()" class="text-sm bg-primary-600 text-white px-3 py-1.5 rounded-lg font-medium">+ Add</button>
+        </header>
+        <main class="px-4 py-3">
+            <div id="expiring-section" class="mb-4 hidden">
+                <h2 class="text-sm font-semibold text-rose-600 uppercase tracking-wider mb-2">⚠ Expiring Soon</h2>
+                <div id="expiring-offers" class="space-y-2"></div>
+            </div>
+            <div>
+                <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-2">Active Offers</h2>
+                <div id="offer-list" class="space-y-2">
+                    <p class="text-sm text-slate-400 py-8 text-center">No active offers</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== FAB ===== -->
+    <button id="fab" onclick="openTransactionModal()"
+        class="fixed bottom-24 right-4 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl z-20 hover:bg-primary-700 active:scale-95 transition-transform"
+        style="box-shadow: 0 8px 24px rgba(0,0,0,0.15);">
+        +
+    </button>
+
+    <!-- ===== BOTTOM NAV ===== -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 bottom-nav z-30 max-w-lg mx-auto">
+        <div class="flex justify-around py-2">
+            <button onclick="navigate('home')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="home">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+                <span class="text-[10px] font-medium">Home</span>
+            </button>
+            <button onclick="navigate('transactions')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="transactions">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                <span class="text-[10px] font-medium">Transactions</span>
+            </button>
+            <button onclick="navigate('cards')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="cards">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                <span class="text-[10px] font-medium">Cards</span>
+            </button>
+            <button onclick="navigate('offers')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="offers">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
+                <span class="text-[10px] font-medium">Offers</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ===== TRANSACTION MODAL ===== -->
+    <div id="modal-transaction" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="closeModal('modal-transaction')"></div>
+        <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto max-w-lg mx-auto">
+            <div class="sticky top-0 bg-white px-4 py-3 border-b border-slate-100 flex justify-between items-center rounded-t-2xl">
+                <h2 class="text-lg font-semibold">Add Transaction</h2>
+                <button onclick="closeModal('modal-transaction')" class="text-slate-400 text-xl">&times;</button>
+            </div>
+            <form id="form-transaction" class="p-4 space-y-4" onsubmit="saveTransaction(event)">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Payment Source</label>
+                    <select id="txn-source" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                        <option value="">Select source...</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label>
+                        <input type="number" id="txn-amount" required step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
+                        <input type="date" id="txn-date" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Merchant</label>
+                    <input type="text" id="txn-merchant" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Amazon, Swiggy">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                    <input type="text" id="txn-category" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Groceries, Fuel, Dining">
+                </div>
+                <!-- Cashback Preview -->
+                <div id="cashback-preview" class="bg-emerald-50 rounded-lg p-3 hidden">
+                    <p class="text-sm text-emerald-700">
+                        Expected Cashback: <span id="preview-amount" class="font-semibold">₹0</span>
+                        <span id="preview-offer" class="text-xs text-emerald-600 block mt-0.5"></span>
+                    </p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Expected Cashback (₹) <span class="text-slate-400 font-normal">— override if needed</span></label>
+                    <input type="number" id="txn-cashback" step="0.01" min="0" value="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
+                    <textarea id="txn-notes" rows="2" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="Optional notes"></textarea>
+                </div>
+                <input type="hidden" id="txn-offer-id" value="">
+                <input type="hidden" id="txn-edit-id" value="">
+                <button type="submit" class="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 active:scale-[0.98] transition-transform">
+                    Save Transaction
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== SOURCE MODAL ===== -->
+    <div id="modal-source" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="closeModal('modal-source')"></div>
+        <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto max-w-lg mx-auto">
+            <div class="sticky top-0 bg-white px-4 py-3 border-b border-slate-100 flex justify-between items-center rounded-t-2xl">
+                <h2 class="text-lg font-semibold">Add Payment Source</h2>
+                <button onclick="closeModal('modal-source')" class="text-slate-400 text-xl">&times;</button>
+            </div>
+            <form id="form-source" class="p-4 space-y-4" onsubmit="saveSource(event)">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                    <input type="text" id="src-name" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. HDFC Millennia">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                        <select id="src-type" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                            <option value="credit">Credit Card</option>
+                            <option value="debit">Debit Card</option>
+                            <option value="upi">UPI App</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Provider</label>
+                        <input type="text" id="src-provider" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. HDFC">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Network</label>
+                        <select id="src-network" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                            <option value="">None</option>
+                            <option value="Visa">Visa</option>
+                            <option value="Mastercard">Mastercard</option>
+                            <option value="Rupay">Rupay</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Color</label>
+                        <input type="color" id="src-color" value="#6366f1" class="w-full h-10 rounded-lg border border-slate-200 cursor-pointer">
+                    </div>
+                </div>
+                <input type="hidden" id="src-edit-id" value="">
+                <button type="submit" class="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700">Save Source</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== OFFER MODAL ===== -->
+    <div id="modal-offer" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="closeModal('modal-offer')"></div>
+        <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto max-w-lg mx-auto">
+            <div class="sticky top-0 bg-white px-4 py-3 border-b border-slate-100 flex justify-between items-center rounded-t-2xl">
+                <h2 class="text-lg font-semibold">Add Offer</h2>
+                <button onclick="closeModal('modal-offer')" class="text-slate-400 text-xl">&times;</button>
+            </div>
+            <form id="form-offer" class="p-4 space-y-4" onsubmit="saveOffer(event)">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Payment Source</label>
+                    <select id="ofr-source" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                        <option value="">Select source...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                    <input type="text" id="ofr-category" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Groceries, Fuel, Amazon">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                        <select id="ofr-type" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                            <option value="percentage">Percentage (%)</option>
+                            <option value="flat">Flat (₹)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Value</label>
+                        <input type="number" id="ofr-value" required step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 5">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Max Cap (₹) <span class="text-slate-400 font-normal">— optional</span></label>
+                    <input type="number" id="ofr-cap" step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 200">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Valid From</label>
+                        <input type="date" id="ofr-from" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
+                        <input type="date" id="ofr-until" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Terms</label>
+                    <textarea id="ofr-terms" rows="2" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="Optional terms & conditions"></textarea>
+                </div>
+                <input type="hidden" id="ofr-edit-id" value="">
+                <button type="submit" class="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700">Save Offer</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== TOAST ===== -->
+    <div id="toast" class="fixed top-4 left-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-xl text-sm font-medium shadow-lg z-50 hidden max-w-lg mx-auto transition-all transform -translate-y-2 opacity-0">
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

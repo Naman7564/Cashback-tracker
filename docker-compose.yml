@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./db:/app/db
+    environment:
+      - SECRET_KEY=change-me-in-production
+      - DEBUG=True
+      - DB_PATH=/app/db/db.sqlite3

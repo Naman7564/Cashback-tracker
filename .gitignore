@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.sqlite3
+db/
+venv/
+.env
+staticfiles/
+node_modules/
+*.log
+stitch-designs/
