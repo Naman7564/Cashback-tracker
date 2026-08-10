@@ -89,6 +89,13 @@
         .glass-input:focus { border-color: rgba(99,102,241,0.6); box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
         /* Glow dot */
         .glow-dot { border-radius: 50%; }
+        /* Nav tab tap */
+        .nav-tab:active .nav-icon { transform: scale(0.92); }
+        .nav-tab.active .nav-pill { opacity: 1; background: rgba(255,255,255,0.08); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        .nav-tab.active .nav-icon { stroke: #fff; transform: scale(1.05); }
+        .nav-tab.active .nav-label { color: #fff; }
+        .nav-tab:not(.active) .nav-icon { stroke: #64748b; }
+        .nav-tab:not(.active) .nav-label { color: #64748b; }
     </style>
 </head>
 <body class="max-w-lg mx-auto relative">
@@ -261,22 +268,46 @@
     <!-- ===== BOTTOM TAB BAR ===== -->
     <nav class="fixed bottom-0 left-0 right-0 z-30 max-w-lg mx-auto">
         <div class="bg-black/40 backdrop-blur-2xl border-t border-white/10" style="padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -4px 20px rgba(0,0,0,0.3);">
-            <div class="flex justify-around pt-2 pb-1">
-                <button onclick="navigate('home')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="home">
-                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24" stroke-width="1.5"><path class="nav-stroke" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
-                    <span class="text-[10px] font-medium">Home</span>
+            <div class="flex justify-around pt-1.5 pb-1">
+                <!-- Home -->
+                <button onclick="navigate('home')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="home">
+                    <div class="nav-pill absolute top-0 w-11 h-11 rounded-2xl transition-all duration-200 opacity-0"></div>
+                    <svg class="w-6 h-6 nav-icon relative z-10 mt-1.5 transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 12l8-8 8 8"/>
+                        <path d="M6 10.5V19a1 1 0 001 1h3.5v-4.5a1 1 0 011-1h1a1 1 0 011 1V20H17a1 1 0 001-1v-8.5"/>
+                    </svg>
+                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Home</span>
                 </button>
-                <button onclick="navigate('transactions')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="transactions">
-                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24" stroke-width="1.5"><path class="nav-stroke" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                    <span class="text-[10px] font-medium">Transactions</span>
+                <!-- Transactions -->
+                <button onclick="navigate('transactions')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="transactions">
+                    <div class="nav-pill absolute top-0 w-11 h-11 rounded-2xl transition-all duration-200 opacity-0"></div>
+                    <svg class="w-6 h-6 nav-icon relative z-10 mt-1.5 transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="5" y="3" width="14" height="18" rx="2"/>
+                        <line x1="9" y1="8" x2="15" y2="8"/>
+                        <line x1="9" y1="12" x2="15" y2="12"/>
+                        <line x1="9" y1="16" x2="12" y2="16"/>
+                    </svg>
+                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Transactions</span>
                 </button>
-                <button onclick="navigate('cards')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="cards">
-                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24" stroke-width="1.5"><path class="nav-stroke" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-                    <span class="text-[10px] font-medium">Cards</span>
+                <!-- Cards -->
+                <button onclick="navigate('cards')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="cards">
+                    <div class="nav-pill absolute top-0 w-11 h-11 rounded-2xl transition-all duration-200 opacity-0"></div>
+                    <svg class="w-6 h-6 nav-icon relative z-10 mt-1.5 transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="5" width="20" height="14" rx="3"/>
+                        <line x1="2" y1="10" x2="22" y2="10"/>
+                        <line x1="6" y1="15" x2="8" y2="15"/>
+                        <line x1="11" y1="15" x2="13" y2="15"/>
+                    </svg>
+                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Cards</span>
                 </button>
-                <button onclick="navigate('offers')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="offers">
-                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24" stroke-width="1.5"><path class="nav-stroke" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
-                    <span class="text-[10px] font-medium">Offers</span>
+                <!-- Offers -->
+                <button onclick="navigate('offers')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="offers">
+                    <div class="nav-pill absolute top-0 w-11 h-11 rounded-2xl transition-all duration-200 opacity-0"></div>
+                    <svg class="w-6 h-6 nav-icon relative z-10 mt-1.5 transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 4h5.5a1 1 0 01.7.3l8.5 8.5a1 1 0 010 1.4l-5.5 5.5a1 1 0 01-1.4 0L3.3 11.2A1 1 0 013 10.5V5a1 1 0 011-1z"/>
+                        <circle cx="7" cy="8" r="1"/>
+                    </svg>
+                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Offers</span>
                 </button>
             </div>
         </div>

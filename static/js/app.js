@@ -36,18 +36,7 @@ function navigate(page) {
 function updateTabBar() {
     document.querySelectorAll('.nav-tab').forEach(tab => {
         const isActive = tab.dataset.page === currentPage;
-        const icon = tab.querySelector('.nav-icon');
-        if (isActive) {
-            icon.setAttribute('fill', 'currentColor');
-            icon.setAttribute('stroke', 'currentColor');
-            tab.classList.add('text-white');
-            tab.classList.remove('text-slate-500');
-        } else {
-            icon.setAttribute('fill', 'none');
-            icon.setAttribute('stroke', 'currentColor');
-            tab.classList.remove('text-white');
-            tab.classList.add('text-slate-500');
-        }
+        tab.classList.toggle('active', isActive);
     });
 }
 
