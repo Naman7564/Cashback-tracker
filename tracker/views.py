@@ -1,6 +1,7 @@
 from datetime import date
 from decimal import Decimal
-from django.db.models import Sum
+from django.db.models import Sum, Value, DecimalField
+from django.db.models.functions import Coalesce
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -150,9 +151,13 @@ def todo_list(request):
     sources = PaymentSource.objects.filter(is_active=True).prefetch_related('upi_numbers')
     result = []
     for s in sources:
+        # ponytail: per-row fallback — actual_cashback if set, else expected_cashback
         earned = Transaction.objects.filter(
             source=s, transaction_date=target_date
-        ).aggregate(total=Sum('actual_cashback'))['total'] or 0
+        ).aggregate(total=Sum(Coalesce(
+            'actual_cashback', 'expected_cashback', Value(0),
+            output_field=DecimalField()
+        )))['total'] or 0
         txns_today = Transaction.objects.filter(
             source=s, transaction_date=target_date
         ).order_by('-created_at')[:5]
@@ -195,6 +200,11 @@ def todo_record(request):
     except PaymentSource.DoesNotExist:
         return Response({'error': 'Source not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    try:
+        parsed_date = date.fromisoformat(txn_date)
+    except (ValueError, TypeError):
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+
     txn = Transaction.objects.create(
         source=source,
         amount=Decimal(str(amount)),
@@ -203,7 +213,7 @@ def todo_record(request):
         expected_cashback=Decimal(str(cashback_amount)),
         actual_cashback=Decimal(str(cashback_amount)),
         status='received',
-        transaction_date=txn_date,
+        transaction_date=parsed_date,
     )
     if upi_number_ids and source.source_type == 'upi':
         txn.upi_numbers.set(upi_number_ids)

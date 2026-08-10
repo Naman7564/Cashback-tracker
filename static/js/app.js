@@ -16,7 +16,11 @@ async function api(path, opts = {}) {
     const config = { headers: { 'Content-Type': 'application/json' }, ...opts };
     if (opts.body && typeof opts.body === 'object') config.body = JSON.stringify(opts.body);
     const res = await fetch(url, config);
-    if (!res.ok) throw new Error(`API ${res.status}`);
+    if (!res.ok) {
+        let msg = `API ${res.status}`;
+        try { const data = await res.json(); msg = data.error || data.detail || JSON.stringify(data); } catch {}
+        throw new Error(msg);
+    }
     return res.json();
 }
 
@@ -357,8 +361,9 @@ async function saveDailyTarget() {
         }});
         haptic(10);
         toast('Target saved');
+        loadTodo();
     } catch (e) {
-        toast('Failed to save target', true);
+        toast(e.message || 'Failed to save target', true);
     }
 }
 
@@ -393,7 +398,7 @@ async function recordTodoTransaction() {
         if (currentPage === 'home') loadDashboard();
     } catch (e) {
         haptic([50, 50, 50]);
-        toast('Failed to record', true);
+        toast('Failed to record: ' + e.message, true);
     }
 }
 
