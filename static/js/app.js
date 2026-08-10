@@ -1,4 +1,4 @@
-/* Cashback Tracker — iOS-native PWA */
+/* Cashback Tracker — Dark Glassmorphism PWA */
 // ponytail: vanilla JS, no TS compile step. Add TS build when team joins.
 
 const API = '/api';
@@ -39,12 +39,14 @@ function updateTabBar() {
         const icon = tab.querySelector('.nav-icon');
         if (isActive) {
             icon.setAttribute('fill', 'currentColor');
-            tab.classList.add('text-primary-600');
-            tab.classList.remove('text-ios-gray');
+            icon.setAttribute('stroke', 'currentColor');
+            tab.classList.add('text-white');
+            tab.classList.remove('text-slate-500');
         } else {
             icon.setAttribute('fill', 'none');
-            tab.classList.remove('text-primary-600');
-            tab.classList.add('text-ios-gray');
+            icon.setAttribute('stroke', 'currentColor');
+            tab.classList.remove('text-white');
+            tab.classList.add('text-slate-500');
         }
     });
 }
@@ -92,7 +94,6 @@ function closeSheet(id) {
         if (statusGroup) statusGroup.classList.add('hidden');
         const cashbackPreview = document.getElementById('cashback-preview');
         if (cashbackPreview) cashbackPreview.classList.add('hidden');
-        // Reset sheet titles
         const titleMap = { 'sheet-transaction': 'New Transaction', 'sheet-source': 'Add Source', 'sheet-offer': 'Add Offer' };
         const title = sheet.querySelector('h2');
         if (title && titleMap[id]) title.textContent = titleMap[id];
@@ -134,19 +135,40 @@ function submitForm(formId) {
     document.getElementById(formId).requestSubmit();
 }
 
+// ──── Number Counter Animation ────
+function animateCounter(el, target, prefix = '₹') {
+    const duration = 800;
+    const start = performance.now();
+    const from = 0;
+    const to = parseFloat(target) || 0;
+
+    function tick(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        // ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = from + (to - from) * eased;
+        el.textContent = `${prefix}${fmt(current)}`;
+        if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+}
+
 // ──── Dashboard ────
 async function loadDashboard() {
     try {
         const data = await api('dashboard-stats/');
-        document.getElementById('stat-pending').textContent = `₹${fmt(data.pending_cashback)}`;
-        document.getElementById('stat-earned').textContent = `₹${fmt(data.earned_this_month)}`;
-        document.getElementById('stat-sources').textContent = data.active_sources;
+        // Animate numbers
+        animateCounter(document.getElementById('stat-pending'), data.pending_cashback);
+        animateCounter(document.getElementById('stat-earned'), data.earned_this_month);
+        const sourcesEl = document.getElementById('stat-sources');
+        sourcesEl.textContent = data.active_sources;
         document.getElementById('stat-best').textContent = data.best_source || '—';
 
         const container = document.getElementById('recent-transactions');
         if (data.recent_transactions?.length) {
             container.innerHTML = data.recent_transactions.map((t, i) =>
-                `${i > 0 ? '<div class="hairline ml-14"></div>' : ''}` + txnRow(t)
+                `${i > 0 ? '<div class="glass-sep ml-14"></div>' : ''}` + txnRow(t)
             ).join('');
         } else {
             container.innerHTML = emptyState('clipboard', 'No transactions yet', 'Tap + to add your first one');
@@ -168,11 +190,11 @@ async function loadTransactions(append = false) {
         const data = await api(url);
         const list = document.getElementById('transaction-list');
         const rows = (data.results || []).map((t, i) =>
-            `${i > 0 ? '<div class="hairline ml-14"></div>' : ''}` + txnRow(t, true)
+            `${i > 0 ? '<div class="glass-sep ml-14"></div>' : ''}` + txnRow(t, true)
         ).join('');
 
         if (append) {
-            list.innerHTML += '<div class="hairline ml-14"></div>' + rows;
+            list.innerHTML += '<div class="glass-sep ml-14"></div>' + rows;
         } else {
             list.innerHTML = rows || emptyState('clipboard', 'No transactions');
         }
@@ -190,35 +212,36 @@ function loadMoreTransactions() {
 }
 
 function txnRow(t, swipeable = false) {
-    const statusColors = {
-        pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-        received: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-        disputed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-        na: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+    const statusStyles = {
+        pending: { bg: 'bg-amber-500/15', text: 'text-amber-300', border: 'border-amber-500/20' },
+        received: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/20' },
+        disputed: { bg: 'bg-rose-500/15', text: 'text-rose-300', border: 'border-rose-500/20' },
+        na: { bg: 'bg-white/5', text: 'text-slate-400', border: 'border-white/10' }
     };
-    const statusColor = statusColors[t.status] || statusColors.na;
+    const s = statusStyles[t.status] || statusStyles.na;
     const date = new Date(t.transaction_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    const color = t.source_color || '#6366f1';
     const cashback = t.status === 'received' && t.actual_cashback
-        ? `<span class="text-[13px] text-ios-green font-medium">+₹${fmt(t.actual_cashback)}</span>`
+        ? `<span class="text-[13px] text-emerald-400 font-medium">+₹${fmt(t.actual_cashback)}</span>`
         : t.expected_cashback > 0
-            ? `<span class="text-[13px] text-ios-gray">~₹${fmt(t.expected_cashback)}</span>`
+            ? `<span class="text-[13px] text-slate-500">~₹${fmt(t.expected_cashback)}</span>`
             : '';
 
     const inner = `
-        <div class="flex items-center px-4 py-3 press" onclick="editTransaction(${t.id})">
-            <div class="w-3 h-3 rounded-full flex-shrink-0 mr-3" style="background:${t.source_color || '#6366f1'}"></div>
+        <div class="flex items-center px-4 py-3.5 press active:bg-white/10 transition-colors" onclick="editTransaction(${t.id})">
+            <div class="w-2 h-2 rounded-full flex-shrink-0 mr-3 glow-dot" style="background:${color};box-shadow:0 0 8px ${color}99;"></div>
             <div class="flex-1 min-w-0">
-                <p class="text-[17px] font-semibold text-gray-900 dark:text-white truncate">${esc(t.merchant)}</p>
-                <p class="text-[13px] text-ios-gray mt-0.5">${esc(t.source_name || '')} · ${date}</p>
+                <p class="text-[16px] font-semibold text-white truncate">${esc(t.merchant)}</p>
+                <p class="text-[13px] text-slate-400 mt-0.5">${esc(t.source_name || '')} · ${date}</p>
             </div>
             <div class="text-right ml-3 flex-shrink-0">
-                <p class="text-[17px] font-semibold text-gray-900 dark:text-white">₹${fmt(t.amount)}</p>
+                <p class="text-[16px] font-semibold text-white">₹${fmt(t.amount)}</p>
                 <div class="flex items-center justify-end gap-1.5 mt-0.5">
                     ${cashback}
-                    <span class="text-[11px] font-medium px-1.5 py-0.5 rounded-full ${statusColor}">${t.status}</span>
+                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.text} border ${s.border}">${t.status}</span>
                 </div>
             </div>
-            <svg class="w-4 h-4 text-ios-gray ml-1 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+            <svg class="w-4 h-4 text-slate-600 ml-1.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
         </div>`;
 
     if (!swipeable) return inner;
@@ -226,10 +249,10 @@ function txnRow(t, swipeable = false) {
     return `
         <div class="swipe-row" data-id="${t.id}">
             <div class="swipe-actions swipe-actions-right">
-                <button onclick="quickStatus(${t.id},'received')" class="bg-ios-green text-white px-4 flex items-center text-[13px] font-medium">Received</button>
-                <button onclick="quickStatus(${t.id},'disputed')" class="bg-ios-orange text-white px-4 flex items-center text-[13px] font-medium">Dispute</button>
+                <button onclick="quickStatus(${t.id},'received')" class="bg-emerald-600 text-white px-5 flex items-center text-[13px] font-semibold">Received</button>
+                <button onclick="quickStatus(${t.id},'disputed')" class="bg-amber-600 text-white px-5 flex items-center text-[13px] font-semibold">Dispute</button>
             </div>
-            <div class="swipe-content bg-white dark:bg-ios-gray6">${inner}</div>
+            <div class="swipe-content bg-void">${inner}</div>
         </div>`;
 }
 
@@ -301,34 +324,34 @@ async function loadSources() {
         allSources = data.results || data;
         const container = document.getElementById('source-list');
         if (!allSources.length) {
-            container.innerHTML = `<div class="bg-white dark:bg-ios-gray6 rounded-xl">${emptyState('card', 'No payment sources', 'Add your cards and UPI apps')}</div>`;
+            container.innerHTML = `<div class="glass rounded-3xl ring-1 ring-white/10">${emptyState('card', 'No payment sources', 'Add your cards and UPI apps')}</div>`;
             return;
         }
-        container.innerHTML = `<div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
-            ${allSources.map((s, i) => `${i > 0 ? '<div class="hairline ml-14"></div>' : ''}${sourceRow(s)}`).join('')}
-        </div>`;
+        container.innerHTML = allSources.map((s, i) => sourceCard(s, i)).join('');
     } catch (e) {
         console.error('Sources load failed:', e);
     }
 }
 
-function sourceRow(s) {
+function sourceCard(s, idx) {
     const typeLabel = { credit: 'Credit', debit: 'Debit', upi: 'UPI' }[s.source_type] || s.source_type;
     return `
-        <div class="flex items-center px-4 py-3 press" onclick="editSource(${s.id})">
-            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mr-3" style="background:${s.color}20">
-                <div class="w-3 h-3 rounded-full" style="background:${s.color}"></div>
-            </div>
-            <div class="flex-1 min-w-0">
-                <p class="text-[17px] font-semibold text-gray-900 dark:text-white truncate">${esc(s.name)}</p>
-                <p class="text-[13px] text-ios-gray mt-0.5">${esc(s.provider)} · ${typeLabel}${s.network ? ' · ' + s.network : ''}</p>
-            </div>
-            <div class="text-right ml-3 flex-shrink-0">
-                <p class="text-[15px] font-semibold text-ios-green">₹${fmt(s.total_earned || 0)}</p>
+        <div class="stagger glass rounded-3xl p-5 ring-1 ring-white/10 mb-3 press bg-gradient-to-br from-white/10 to-white/5" style="animation-delay:${idx * 50}ms" onclick="editSource(${s.id})">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-3 h-3 rounded-full glow-dot" style="background:${s.color};box-shadow:0 0 10px ${s.color}88;"></div>
+                    <div>
+                        <p class="text-[18px] font-bold text-white">${esc(s.name)}</p>
+                        <p class="text-[13px] text-slate-400 mt-0.5">${esc(s.provider)} · ${typeLabel}${s.network ? ' · ' + s.network : ''}</p>
+                    </div>
+                </div>
                 <button onclick="event.stopPropagation();toggleSource(${s.id},${!s.is_active})"
-                    class="mt-1 w-12 h-7 rounded-full relative transition-colors ${s.is_active ? 'bg-ios-green' : 'bg-gray-300 dark:bg-ios-gray4'}">
+                    class="w-12 h-7 rounded-full relative transition-colors ${s.is_active ? 'bg-emerald-500' : 'bg-slate-600'}">
                     <div class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${s.is_active ? 'left-[22px]' : 'left-0.5'}"></div>
                 </button>
+            </div>
+            <div class="mt-3 flex gap-2">
+                <span class="text-[12px] font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">Earned ₹${fmt(s.total_earned || 0)}</span>
             </div>
         </div>`;
 }
@@ -358,7 +381,7 @@ async function loadOffers() {
         if (expiring.length) {
             expiringSection.classList.remove('hidden');
             expiringList.innerHTML = expiring.map((o, i) =>
-                `${i > 0 ? '<div class="hairline ml-4"></div>' : ''}${offerRow(o, true)}`
+                `${i > 0 ? '<div class="glass-sep ml-4"></div>' : ''}${offerRow(o, true)}`
             ).join('');
         } else {
             expiringSection.classList.add('hidden');
@@ -367,7 +390,7 @@ async function loadOffers() {
         const offerList = document.getElementById('offer-list');
         if (rest.length) {
             offerList.innerHTML = rest.map((o, i) =>
-                `${i > 0 ? '<div class="hairline ml-4"></div>' : ''}${offerRow(o)}`
+                `${i > 0 ? '<div class="glass-sep ml-4"></div>' : ''}${offerRow(o)}`
             ).join('');
         } else if (!expiring.length) {
             offerList.innerHTML = emptyState('tag', 'No active offers');
@@ -384,20 +407,20 @@ function offerRow(o, isExpiring = false) {
     const cap = o.max_cap ? ` (max ₹${fmt(o.max_cap)})` : '';
     const days = Math.ceil((new Date(o.valid_until) - new Date()) / 86400000);
     const expiry = isExpiring
-        ? `<span class="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">${days}d left</span>`
-        : `<span class="text-[13px] text-ios-gray">until ${new Date(o.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>`;
+        ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">${days}d left</span>`
+        : `<span class="text-[13px] text-slate-500">until ${new Date(o.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>`;
 
     return `
-        <div class="flex items-center px-4 py-3 press" onclick="editOffer(${o.id})">
+        <div class="flex items-center px-4 py-3.5 press active:bg-white/10 transition-colors" onclick="editOffer(${o.id})">
             <div class="flex-1 min-w-0">
-                <p class="text-[17px] font-semibold text-gray-900 dark:text-white">${esc(o.category)}</p>
-                <p class="text-[13px] text-ios-gray mt-0.5">${esc(o.source_name || '')}</p>
+                <p class="text-[16px] font-semibold text-white">${esc(o.category)}</p>
+                <p class="text-[13px] text-slate-400 mt-0.5">${esc(o.source_name || '')}</p>
             </div>
             <div class="text-right ml-3 flex-shrink-0">
-                <p class="text-[17px] font-semibold text-primary-600 dark:text-primary-500">${value}${cap}</p>
+                <p class="text-[16px] font-semibold text-indigo-400">${value}${cap}</p>
                 ${expiry}
             </div>
-            <svg class="w-4 h-4 text-ios-gray ml-1 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+            <svg class="w-4 h-4 text-slate-600 ml-1.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
         </div>`;
 }
 
@@ -527,11 +550,11 @@ function setTxnStatus(status) {
     document.querySelectorAll('.txn-status-btn').forEach(btn => {
         const val = btn.textContent.trim().toLowerCase();
         if (val === status) {
-            btn.classList.add('bg-primary-600', 'text-white');
-            btn.classList.remove('text-gray-600', 'dark:text-ios-gray');
+            btn.classList.add('bg-gradient-to-r', 'from-indigo-600', 'to-violet-600', 'text-white');
+            btn.classList.remove('text-slate-400');
         } else {
-            btn.classList.remove('bg-primary-600', 'text-white');
-            btn.classList.add('text-gray-600', 'dark:text-ios-gray');
+            btn.classList.remove('bg-gradient-to-r', 'from-indigo-600', 'to-violet-600', 'text-white');
+            btn.classList.add('text-slate-400');
         }
     });
     document.getElementById('actual-cashback-group').classList.toggle('hidden', status !== 'received');
@@ -636,11 +659,11 @@ function setStatusFilter(val) {
     statusFilter = val;
     document.querySelectorAll('.status-seg').forEach(btn => {
         if (btn.dataset.val === val) {
-            btn.classList.add('bg-white', 'dark:bg-ios-gray4', 'shadow-sm');
-            btn.classList.remove('text-ios-gray');
+            btn.classList.add('bg-white/10', 'text-white');
+            btn.classList.remove('text-slate-500');
         } else {
-            btn.classList.remove('bg-white', 'dark:bg-ios-gray4', 'shadow-sm');
-            btn.classList.add('text-ios-gray');
+            btn.classList.remove('bg-white/10', 'text-white');
+            btn.classList.add('text-slate-500');
         }
     });
     haptic(10);
@@ -684,7 +707,13 @@ function haptic(pattern) {
 function toast(msg, isError = false) {
     const el = document.getElementById('toast');
     el.textContent = msg;
-    el.className = `fixed left-4 right-4 px-4 py-3 rounded-xl text-[15px] font-medium shadow-lg z-[60] max-w-lg mx-auto transition-all transform ${isError ? 'bg-ios-red' : 'bg-gray-800 dark:bg-ios-gray5'} text-white`;
+    if (isError) {
+        el.style.background = 'rgba(244,63,94,0.9)';
+        el.style.borderColor = 'rgba(244,63,94,0.3)';
+    } else {
+        el.style.background = 'rgba(255,255,255,0.08)';
+        el.style.borderColor = 'rgba(255,255,255,0.12)';
+    }
     el.style.top = `calc(env(safe-area-inset-top, 0px) + 8px)`;
     el.classList.remove('hidden', '-translate-y-2', 'opacity-0');
     setTimeout(() => {
@@ -713,9 +742,9 @@ function emptyState(icon, title, subtitle = '') {
         tag: '<path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/>'
     };
     return `<div class="py-12 text-center">
-        <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-ios-gray3 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">${icons[icon] || icons.clipboard}</svg>
-        <p class="text-[17px] font-semibold text-gray-500 dark:text-ios-gray">${title}</p>
-        ${subtitle ? `<p class="text-[15px] text-ios-gray mt-1">${subtitle}</p>` : ''}
+        <svg class="w-12 h-12 mx-auto text-slate-600 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">${icons[icon] || icons.clipboard}</svg>
+        <p class="text-[17px] font-semibold text-slate-400">${title}</p>
+        ${subtitle ? `<p class="text-[15px] text-slate-500 mt-1">${subtitle}</p>` : ''}
     </div>`;
 }
 
@@ -746,22 +775,11 @@ function dismissA2HS() {
     localStorage.setItem('a2hs_dismissed', '1');
 }
 
-// ──── Dark Mode ────
-// ponytail: follow system preference only, manual toggle add when requested
-function initDarkMode() {
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-    }
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        document.documentElement.classList.toggle('dark', e.matches);
-        document.documentElement.classList.toggle('light', !e.matches);
-    });
-}
-
 // ──── Init ────
 document.addEventListener('DOMContentLoaded', () => {
-    initDarkMode();
+    // ponytail: dark-only, no light mode. Override system preference.
+    document.documentElement.classList.add('dark');
+
     const page = pathToPage();
     navigate(page);
     populateMonths();
