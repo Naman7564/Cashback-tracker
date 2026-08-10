@@ -52,6 +52,7 @@ class Transaction(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     transaction_date = models.DateField()
     statement_month = models.CharField(max_length=7, blank=True)
+    upi_numbers = models.ManyToManyField('UPINumber', blank=True, related_name='transactions')
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -65,3 +66,30 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.merchant} - ₹{self.amount} ({self.status})"
+
+
+class UPINumber(models.Model):
+    source = models.ForeignKey(PaymentSource, on_delete=models.CASCADE, related_name='upi_numbers')
+    upi_id = models.CharField(max_length=100)
+    label = models.CharField(max_length=50, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['upi_id']
+
+    def __str__(self):
+        return f"{self.upi_id} ({self.label or 'No label'})"
+
+
+class DailyTarget(models.Model):
+    source = models.ForeignKey(PaymentSource, on_delete=models.CASCADE, related_name='daily_targets')
+    target_date = models.DateField()
+    target_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        unique_together = ['source', 'target_date']
+        ordering = ['-target_date']
+
+    def __str__(self):
+        return f"{self.source.name} - {self.target_date} - ₹{self.target_amount}"

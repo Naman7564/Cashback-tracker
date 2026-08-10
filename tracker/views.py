@@ -4,8 +4,11 @@ from django.db.models import Sum
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import PaymentSource, Offer, Transaction
-from .serializers import PaymentSourceSerializer, OfferSerializer, TransactionSerializer
+from .models import PaymentSource, Offer, Transaction, UPINumber, DailyTarget
+from .serializers import (
+    PaymentSourceSerializer, OfferSerializer, TransactionSerializer,
+    UPINumberSerializer, DailyTargetSerializer
+)
 
 
 class PaymentSourceViewSet(viewsets.ModelViewSet):
@@ -126,3 +129,100 @@ def dashboard_stats(request):
         'best_source': best['source__name'] if best else None,
         'recent_transactions': TransactionSerializer(recent, many=True).data,
     })
+
+
+class UPINumberViewSet(viewsets.ModelViewSet):
+    queryset = UPINumber.objects.all()
+    serializer_class = UPINumberSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        source = self.request.query_params.get('source_id')
+        if source:
+            qs = qs.filter(source_id=source)
+        return qs
+
+
+@api_view(['GET'])
+def todo_list(request):
+    """Get all sources with daily target and earned-so-far for a given date."""
+    target_date = request.query_params.get('date', str(date.today()))
+    sources = PaymentSource.objects.filter(is_active=True).prefetch_related('upi_numbers')
+    result = []
+    for s in sources:
+        earned = Transaction.objects.filter(
+            source=s, transaction_date=target_date
+        ).aggregate(total=Sum('actual_cashback'))['total'] or 0
+        txns_today = Transaction.objects.filter(
+            source=s, transaction_date=target_date
+        ).order_by('-created_at')[:5]
+        target = DailyTarget.objects.filter(source=s, target_date=target_date).first()
+        result.append({
+            'source': PaymentSourceSerializer(s).data,
+            'daily_target': float(target.target_amount) if target else 0,
+            'earned_so_far': float(earned),
+            'transactions_today': TransactionSerializer(txns_today, many=True).data,
+            'upi_numbers': UPINumberSerializer(s.upi_numbers.filter(is_active=True), many=True).data
+                if s.source_type == 'upi' else [],
+        })
+    # Overall summary
+    total_target = sum(r['daily_target'] for r in result)
+    total_earned = sum(r['earned_so_far'] for r in result)
+    return Response({
+        'date': target_date,
+        'total_target': total_target,
+        'total_earned': total_earned,
+        'sources': result,
+    })
+
+
+@api_view(['POST'])
+def todo_record(request):
+    """Record a transaction from the To Do page."""
+    source_id = request.data.get('source_id')
+    amount = request.data.get('amount', 0)
+    merchant = request.data.get('merchant', '')
+    cashback_amount = request.data.get('cashback_amount', 0)
+    upi_number_ids = request.data.get('upi_number_ids', [])
+    txn_date = request.data.get('date', str(date.today()))
+    category = request.data.get('category', '')
+
+    if not source_id or not amount:
+        return Response({'error': 'source_id and amount required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        source = PaymentSource.objects.get(id=source_id)
+    except PaymentSource.DoesNotExist:
+        return Response({'error': 'Source not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    txn = Transaction.objects.create(
+        source=source,
+        amount=Decimal(str(amount)),
+        merchant=merchant or source.name,
+        category=category,
+        expected_cashback=Decimal(str(cashback_amount)),
+        actual_cashback=Decimal(str(cashback_amount)),
+        status='received',
+        transaction_date=txn_date,
+    )
+    if upi_number_ids and source.source_type == 'upi':
+        txn.upi_numbers.set(upi_number_ids)
+
+    return Response(TransactionSerializer(txn).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+def set_daily_target(request):
+    """Set or update daily target for a source."""
+    source_id = request.data.get('source_id')
+    target_date = request.data.get('date', str(date.today()))
+    target_amount = request.data.get('target_amount', 0)
+
+    if not source_id:
+        return Response({'error': 'source_id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    target, _ = DailyTarget.objects.update_or_create(
+        source_id=source_id, target_date=target_date,
+        defaults={'target_amount': Decimal(str(target_amount))}
+    )
+    return Response(DailyTargetSerializer(target).data)

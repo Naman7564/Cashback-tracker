@@ -3,10 +3,12 @@
 
 const API = '/api';
 let currentPage = 'home';
-let txnPage = 1, txnHasMore = false;
 let statusFilter = '', monthFilter = '', sourceFilter = '';
 let allSources = [];
 let calcTimer = null;
+let todoDate = new Date().toISOString().split('T')[0];
+let todoSourceData = null; // currently open source in record modal
+let todoData = null; // cached todo list response
 
 // ──── API Helper ────
 async function api(path, opts = {}) {
@@ -27,7 +29,7 @@ function navigate(page) {
     updateTabBar();
     haptic(10);
     if (page === 'home') loadDashboard();
-    else if (page === 'transactions') { txnPage = 1; loadTransactions(); }
+    else if (page === 'todo') loadTodo();
     else if (page === 'cards') loadSources();
     else if (page === 'offers') loadOffers();
     window.scrollTo(0, 0);
@@ -50,7 +52,7 @@ window.addEventListener('popstate', (e) => {
 
 function pathToPage() {
     const p = location.pathname.replace(/\//g, '');
-    return ['transactions', 'cards', 'offers'].includes(p) ? p : 'home';
+    return ['todo', 'cards', 'offers'].includes(p) ? p : 'home';
 }
 
 // ──── Bottom Sheet System ────
@@ -83,7 +85,7 @@ function closeSheet(id) {
         if (statusGroup) statusGroup.classList.add('hidden');
         const cashbackPreview = document.getElementById('cashback-preview');
         if (cashbackPreview) cashbackPreview.classList.add('hidden');
-        const titleMap = { 'sheet-transaction': 'New Transaction', 'sheet-source': 'Add Source', 'sheet-offer': 'Add Offer' };
+        const titleMap = { 'sheet-transaction': 'New Transaction', 'sheet-source': 'Add Source', 'sheet-offer': 'Add Offer', 'sheet-todo-record': 'Record Transaction' };
         const title = sheet.querySelector('h2');
         if (title && titleMap[id]) title.textContent = titleMap[id];
     }, 350);
@@ -167,37 +169,232 @@ async function loadDashboard() {
     }
 }
 
-// ──── Transactions ────
-async function loadTransactions(append = false) {
-    if (!append) txnPage = 1;
-    let url = `transactions/?page=${txnPage}`;
-    if (statusFilter) url += `&status=${statusFilter}`;
-    if (monthFilter) url += `&statement_month=${monthFilter}`;
-    if (sourceFilter) url += `&source=${sourceFilter}`;
+// ──── To Do ────
+function buildDateSelector() {
+    const container = document.getElementById('date-selector');
+    if (!container) return;
+    const today = new Date();
+    let pills = '';
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const val = d.toISOString().split('T')[0];
+        const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        const active = val === todoDate;
+        pills += `<button onclick="selectTodoDate('${val}')" class="flex-shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold transition-all press ${active ? 'bg-indigo-500/80 text-white' : 'bg-white/5 text-slate-400 border border-white/5'}">${label}</button>`;
+    }
+    container.innerHTML = pills;
+}
 
+function selectTodoDate(dateStr) {
+    todoDate = dateStr;
+    buildDateSelector();
+    loadTodo();
+    haptic(10);
+}
+
+async function loadTodo() {
+    buildDateSelector();
     try {
-        const data = await api(url);
-        const list = document.getElementById('transaction-list');
-        const rows = (data.results || []).map((t, i) =>
-            `${i > 0 ? '<div class="glass-sep ml-14"></div>' : ''}` + txnRow(t, true)
-        ).join('');
+        const data = await api(`todo/?date=${todoDate}`);
+        todoData = data;
+        // Summary
+        animateCounter(document.getElementById('todo-target'), data.total_target);
+        animateCounter(document.getElementById('todo-earned'), data.total_earned);
+        const pct = data.total_target > 0 ? Math.min(100, Math.round((data.total_earned / data.total_target) * 100)) : 0;
+        document.getElementById('todo-progress').style.width = pct + '%';
+        document.getElementById('todo-progress-label').textContent = data.total_target > 0 ? `${pct}% complete` : 'No targets set';
 
-        if (append) {
-            list.innerHTML += '<div class="glass-sep ml-14"></div>' + rows;
-        } else {
-            list.innerHTML = rows || emptyState('clipboard', 'No transactions');
+        // Source cards
+        const container = document.getElementById('todo-source-list');
+        if (!data.sources.length) {
+            container.innerHTML = `<div class="glass rounded-3xl ring-1 ring-white/10">${emptyState('card', 'No payment sources', 'Add cards and UPI apps to start tracking')}</div>`;
+            return;
         }
-
-        txnHasMore = !!data.next;
-        document.getElementById('load-more-txn').classList.toggle('hidden', !txnHasMore);
+        container.innerHTML = data.sources.map((s, i) => todoSourceCard(s, i)).join('');
     } catch (e) {
-        console.error('Transaction load failed:', e);
+        console.error('Todo load failed:', e);
     }
 }
 
-function loadMoreTransactions() {
-    txnPage++;
-    loadTransactions(true);
+function todoSourceCard(item, idx) {
+    const s = item.source;
+    const typeLabel = { credit: 'Credit', debit: 'Debit', upi: 'UPI' }[s.source_type] || s.source_type;
+    const hasTxns = item.transactions_today.length > 0;
+    const earnedPct = item.daily_target > 0 ? Math.min(100, Math.round((item.earned_so_far / item.daily_target) * 100)) : 0;
+    const checkmark = hasTxns
+        ? `<div class="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+           </div>`
+        : `<div class="px-3 py-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/20">
+            <span class="text-[11px] font-semibold text-indigo-300">Record</span>
+           </div>`;
+
+    const miniTxns = item.transactions_today.length
+        ? `<div class="mt-3 pt-3 border-t border-white/5 space-y-1.5">
+            ${item.transactions_today.map(t => `
+                <div class="flex justify-between text-[13px]">
+                    <span class="text-slate-400">${esc(t.merchant)}</span>
+                    <span class="text-emerald-400 font-medium">+₹${fmt(t.actual_cashback || t.expected_cashback)}</span>
+                </div>
+            `).join('')}
+           </div>`
+        : '';
+
+    const targetLine = item.daily_target > 0
+        ? `<div class="mt-2"><div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden"><div class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full" style="width:${earnedPct}%"></div></div>
+           <p class="text-[11px] text-slate-500 mt-1">₹${fmt(item.earned_so_far)} / ₹${fmt(item.daily_target)}</p></div>`
+        : '';
+
+    return `
+        <div class="stagger glass rounded-2xl p-4 ring-1 ring-white/10 press ${hasTxns ? 'opacity-80' : ''}" style="animation-delay:${idx * 50}ms" onclick="openTodoRecord(${s.id})">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full glow-dot flex-shrink-0" style="background:${s.color};box-shadow:0 0 8px ${s.color}99;"></div>
+                    <div>
+                        <p class="text-[16px] font-semibold text-white">${esc(s.name)}</p>
+                        <p class="text-[13px] text-slate-400 mt-0.5">${esc(s.provider)} · ${typeLabel}</p>
+                    </div>
+                </div>
+                ${checkmark}
+            </div>
+            ${targetLine}
+            ${miniTxns}
+        </div>`;
+}
+
+// ──── To Do Record Modal ────
+function openTodoRecord(sourceId) {
+    const item = todoData?.sources.find(s => s.source.id === sourceId);
+    if (!item) return;
+    todoSourceData = item;
+    const s = item.source;
+
+    document.getElementById('todo-record-source-name').textContent = s.name;
+    document.getElementById('todo-record-dot').style.background = s.color;
+    document.getElementById('todo-target-input').value = item.daily_target || '';
+    document.getElementById('todo-amount').value = '';
+    document.getElementById('todo-merchant').value = '';
+    document.getElementById('todo-cashback').value = '0';
+    document.getElementById('todo-cashback-preview').classList.add('hidden');
+
+    // UPI section
+    const upiSection = document.getElementById('todo-upi-section');
+    const cardSection = document.getElementById('todo-card-section');
+    if (s.source_type === 'upi') {
+        upiSection.classList.remove('hidden');
+        cardSection.classList.add('hidden');
+        renderUPINumbers(item.upi_numbers);
+    } else {
+        upiSection.classList.add('hidden');
+        cardSection.classList.remove('hidden');
+        const typeLabel = s.source_type === 'credit' ? 'Credit Card' : 'Debit Card';
+        document.getElementById('todo-card-info').textContent = `${s.name} — ${typeLabel}${s.network ? ' · ' + s.network : ''}`;
+    }
+
+    document.getElementById('todo-add-upi-form').classList.add('hidden');
+    openSheet('sheet-todo-record');
+}
+
+function renderUPINumbers(numbers) {
+    const container = document.getElementById('todo-upi-list');
+    if (!numbers.length) {
+        container.innerHTML = '<p class="px-4 py-3 text-[13px] text-slate-500">No UPI numbers added yet</p>';
+        return;
+    }
+    container.innerHTML = numbers.map(n => `
+        <label class="flex items-center gap-3 px-4 py-3 press cursor-pointer border-b border-white/5 last:border-0">
+            <div class="relative flex-shrink-0">
+                <input type="checkbox" class="peer sr-only" value="${n.id}" data-upi-check>
+                <div class="w-5 h-5 rounded border border-white/20 bg-white/5 peer-checked:bg-indigo-500 peer-checked:border-indigo-400 transition-all"></div>
+                <svg class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <div>
+                <p class="text-[14px] text-white">${esc(n.upi_id)}</p>
+                ${n.label ? `<p class="text-[11px] text-slate-500">${esc(n.label)}</p>` : ''}
+            </div>
+        </label>
+    `).join('');
+}
+
+function toggleAddUPI() {
+    document.getElementById('todo-add-upi-form').classList.toggle('hidden');
+    const input = document.getElementById('todo-new-upi');
+    if (!document.getElementById('todo-add-upi-form').classList.contains('hidden')) input.focus();
+}
+
+async function addUPINumber() {
+    const upiId = document.getElementById('todo-new-upi').value.trim();
+    const label = document.getElementById('todo-new-upi-label').value.trim();
+    if (!upiId || !todoSourceData) return;
+    try {
+        await api('upi-numbers/', { method: 'POST', body: {
+            source: todoSourceData.source.id, upi_id: upiId, label
+        }});
+        haptic(10);
+        document.getElementById('todo-new-upi').value = '';
+        document.getElementById('todo-new-upi-label').value = '';
+        document.getElementById('todo-add-upi-form').classList.add('hidden');
+        // Refresh UPI numbers
+        const nums = await api(`upi-numbers/?source_id=${todoSourceData.source.id}`);
+        const upiNums = nums.results || nums;
+        todoSourceData.upi_numbers = upiNums;
+        renderUPINumbers(upiNums);
+        toast('UPI number added');
+    } catch (e) {
+        toast('Failed to add', true);
+    }
+}
+
+async function saveDailyTarget() {
+    if (!todoSourceData) return;
+    const amount = document.getElementById('todo-target-input').value;
+    try {
+        await api('todo/set-target/', { method: 'POST', body: {
+            source_id: todoSourceData.source.id,
+            date: todoDate,
+            target_amount: parseFloat(amount) || 0
+        }});
+        haptic(10);
+        toast('Target saved');
+    } catch (e) {
+        toast('Failed to save target', true);
+    }
+}
+
+async function recordTodoTransaction() {
+    if (!todoSourceData) return;
+    const amount = document.getElementById('todo-amount').value;
+    const merchant = document.getElementById('todo-merchant').value;
+    const cashback = document.getElementById('todo-cashback').value;
+    if (!amount) { toast('Enter amount', true); return; }
+
+    const body = {
+        source_id: todoSourceData.source.id,
+        amount: parseFloat(amount),
+        merchant: merchant || todoSourceData.source.name,
+        cashback_amount: parseFloat(cashback) || 0,
+        date: todoDate,
+    };
+
+    // Collect checked UPI numbers
+    if (todoSourceData.source.source_type === 'upi') {
+        const checked = [...document.querySelectorAll('[data-upi-check]:checked')].map(c => parseInt(c.value));
+        body.upi_number_ids = checked;
+    }
+
+    try {
+        await api('todo/record/', { method: 'POST', body });
+        haptic(20);
+        closeSheet('sheet-todo-record');
+        toast(`₹${fmt(cashback)} recorded from ${esc(todoSourceData.source.name)}`);
+        if (navigator.vibrate) navigator.vibrate(10);
+        loadTodo();
+        if (currentPage === 'home') loadDashboard();
+    } catch (e) {
+        haptic([50, 50, 50]);
+        toast('Failed to record', true);
+    }
 }
 
 function txnRow(t, swipeable = false) {
@@ -245,7 +442,7 @@ function txnRow(t, swipeable = false) {
         </div>`;
 }
 
-// ──── Swipe Actions ────
+// ──── Swipe Actions (kept for home page recent transactions) ────
 document.addEventListener('DOMContentLoaded', () => {
     const txnList = document.getElementById('transaction-list');
     let activeRow = null, startX = 0, currentX = 0;
@@ -643,48 +840,10 @@ async function editOffer(id) {
     }
 }
 
-// ──── Status Filter (Segmented Control) ────
+// ──── Status Filter (for home page quick-status) ────
 function setStatusFilter(val) {
     statusFilter = val;
-    document.querySelectorAll('.status-seg').forEach(btn => {
-        if (btn.dataset.val === val) {
-            btn.classList.add('bg-white/10', 'text-white');
-            btn.classList.remove('text-slate-500');
-        } else {
-            btn.classList.remove('bg-white/10', 'text-white');
-            btn.classList.add('text-slate-500');
-        }
-    });
     haptic(10);
-    loadTransactions();
-}
-
-// ──── Pull to Refresh ────
-function setupPullToRefresh() {
-    const page = document.getElementById('page-transactions');
-    let startY = 0, pulling = false;
-    const spinner = document.getElementById('ptr-spinner');
-
-    page.addEventListener('touchstart', (e) => {
-        if (window.scrollY === 0) {
-            startY = e.touches[0].clientY;
-            pulling = true;
-        }
-    });
-    page.addEventListener('touchmove', (e) => {
-        if (!pulling) return;
-        const dy = e.touches[0].clientY - startY;
-        if (dy > 20) spinner.classList.add('active');
-    });
-    page.addEventListener('touchend', () => {
-        if (spinner.classList.contains('active')) {
-            loadTransactions().then(() => {
-                spinner.classList.remove('active');
-                haptic(10);
-            });
-        }
-        pulling = false;
-    });
 }
 
 // ──── Haptic Feedback ────
@@ -737,18 +896,6 @@ function emptyState(icon, title, subtitle = '') {
     </div>`;
 }
 
-// ──── Month Filter ────
-function populateMonths() {
-    const sel = document.getElementById('filter-month');
-    const now = new Date();
-    for (let i = 0; i < 12; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-        sel.innerHTML += `<option value="${val}">${label}</option>`;
-    }
-}
-
 // ──── Standalone Mode ────
 function checkStandalone() {
     const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
@@ -771,20 +918,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const page = pathToPage();
     navigate(page);
-    populateMonths();
     loadSourceOptions();
     setupCashbackCalc();
-    setupPullToRefresh();
     checkStandalone();
-
-    document.getElementById('filter-month').addEventListener('change', (e) => {
-        monthFilter = e.target.value;
-        loadTransactions();
-    });
-    document.getElementById('filter-source').addEventListener('change', (e) => {
-        sourceFilter = e.target.value;
-        loadTransactions();
-    });
 
     setStatusFilter('');
 });

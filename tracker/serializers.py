@@ -1,10 +1,23 @@
 from rest_framework import serializers
 from django.db import models as db_models
-from .models import PaymentSource, Offer, Transaction
+from .models import PaymentSource, Offer, Transaction, UPINumber, DailyTarget
+
+
+class UPINumberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UPINumber
+        fields = '__all__'
+
+
+class DailyTargetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyTarget
+        fields = '__all__'
 
 
 class PaymentSourceSerializer(serializers.ModelSerializer):
     total_earned = serializers.SerializerMethodField()
+    upi_numbers = UPINumberSerializer(many=True, read_only=True)
 
     class Meta:
         model = PaymentSource
@@ -27,6 +40,10 @@ class OfferSerializer(serializers.ModelSerializer):
 class TransactionSerializer(serializers.ModelSerializer):
     source_name = serializers.ReadOnlyField(source='source.name')
     source_color = serializers.ReadOnlyField(source='source.color')
+    upi_number_ids = serializers.PrimaryKeyRelatedField(
+        source='upi_numbers', queryset=UPINumber.objects.all(),
+        many=True, required=False
+    )
 
     class Meta:
         model = Transaction

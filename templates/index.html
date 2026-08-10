@@ -157,7 +157,7 @@
             <div class="stagger">
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="text-[17px] font-semibold text-white">Recent Transactions</h2>
-                    <button onclick="navigate('transactions')" class="text-[15px] text-indigo-400 font-medium press">See All ›</button>
+                    <button onclick="navigate('todo')" class="text-[15px] text-indigo-400 font-medium press">See All ›</button>
                 </div>
                 <div class="h-px bg-gradient-to-r from-white/10 via-white/5 to-transparent mb-3"></div>
                 <div id="recent-transactions" class="glass rounded-3xl overflow-hidden ring-1 ring-white/10">
@@ -171,45 +171,42 @@
         </main>
     </div>
 
-    <!-- ===== TRANSACTIONS PAGE ===== -->
-    <div id="page-transactions" class="page relative z-10">
+    <!-- ===== TO DO PAGE ===== -->
+    <div id="page-todo" class="page relative z-10">
         <header class="sticky top-0 z-20" style="padding-top: env(safe-area-inset-top, 0px);">
             <div class="bg-black/30 backdrop-blur-xl border-b border-white/5 px-5 py-3">
-                <div class="flex justify-between items-center">
-                    <h1 class="text-[22px] font-bold text-white">Transactions</h1>
-                    <button onclick="openSheet('sheet-transaction')" class="text-indigo-400 text-[28px] font-light press leading-none">+</button>
-                </div>
-                <!-- Segmented Control -->
-                <div class="flex bg-white/5 rounded-xl p-1 mt-3 border border-white/5">
-                    <button onclick="setStatusFilter('')" class="status-seg flex-1 py-2 text-[13px] font-semibold rounded-lg text-center transition-all" data-val="">All</button>
-                    <button onclick="setStatusFilter('pending')" class="status-seg flex-1 py-2 text-[13px] font-semibold rounded-lg text-center transition-all" data-val="pending">Pending</button>
-                    <button onclick="setStatusFilter('received')" class="status-seg flex-1 py-2 text-[13px] font-semibold rounded-lg text-center transition-all" data-val="received">Received</button>
-                </div>
-                <!-- Filters -->
-                <div class="flex gap-2 mt-3 overflow-x-auto pb-1 no-scrollbar">
-                    <select id="filter-month" class="text-[13px] bg-white/5 rounded-xl px-3 py-2 border border-white/10 font-medium text-slate-300 appearance-none">
-                        <option value="">All Months</option>
-                    </select>
-                    <select id="filter-source" class="text-[13px] bg-white/5 rounded-xl px-3 py-2 border border-white/10 font-medium text-slate-300 appearance-none">
-                        <option value="">All Sources</option>
-                    </select>
+                <h1 class="text-[28px] font-bold text-white tracking-tight">Daily Cashback</h1>
+                <!-- Date Selector -->
+                <div id="date-selector" class="flex gap-2 mt-3 overflow-x-auto pb-1 no-scrollbar">
                 </div>
             </div>
         </header>
-        <main class="px-4 py-4 pb-28">
-            <div id="ptr-spinner" class="ptr-spinner">
-                <div class="py-3">
-                    <svg class="w-6 h-6 text-slate-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+        <main class="px-4 py-4 pb-28 space-y-4">
+            <!-- Daily Summary Card -->
+            <div class="stagger relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-500/20 via-violet-500/15 to-purple-500/10 backdrop-blur-2xl border border-white/15 p-5 shadow-lg shadow-black/20">
+                <div class="absolute -right-8 -top-8 w-40 h-40 bg-indigo-500/30 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="flex justify-between items-center mb-3">
+                    <div>
+                        <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Today's Target</p>
+                        <p id="todo-target" class="text-[28px] font-bold text-white mt-0.5">₹0</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Earned So Far</p>
+                        <p id="todo-earned" class="text-[28px] font-bold text-emerald-400 mt-0.5">₹0</p>
+                    </div>
                 </div>
+                <div class="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+                    <div id="todo-progress" class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500" style="width:0%"></div>
+                </div>
+                <p id="todo-progress-label" class="text-[12px] text-slate-400 mt-1.5 text-center">0% complete</p>
             </div>
-            <div id="transaction-list" class="glass rounded-3xl overflow-hidden ring-1 ring-white/10">
-                <div class="py-12 text-center">
+            <!-- Source Task Cards -->
+            <div id="todo-source-list" class="space-y-3">
+                <div class="glass rounded-3xl ring-1 ring-white/10 py-12 text-center">
                     <svg class="w-12 h-12 mx-auto text-slate-600 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                    <p class="text-[17px] font-semibold text-slate-400">No transactions</p>
+                    <p class="text-[17px] font-semibold text-slate-400">No payment sources</p>
+                    <p class="text-[15px] text-slate-500 mt-1">Add cards and UPI apps to start tracking</p>
                 </div>
-            </div>
-            <div id="load-more-txn" class="py-4 text-center hidden">
-                <button onclick="loadMoreTransactions()" class="text-[15px] text-indigo-400 font-medium press">Load More</button>
             </div>
         </main>
     </div>
@@ -278,16 +275,16 @@
                     </svg>
                     <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Home</span>
                 </button>
-                <!-- Transactions -->
-                <button onclick="navigate('transactions')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="transactions">
+                <!-- To Do -->
+                <button onclick="navigate('todo')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="todo">
                     <div class="nav-pill absolute top-0 w-11 h-11 rounded-2xl transition-all duration-200 opacity-0"></div>
                     <svg class="w-6 h-6 nav-icon relative z-10 mt-1.5 transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="5" y="3" width="14" height="18" rx="2"/>
+                        <rect x="4" y="3" width="16" height="18" rx="2"/>
+                        <path d="M9 12l2 2 4-4"/>
                         <line x1="9" y1="8" x2="15" y2="8"/>
-                        <line x1="9" y1="12" x2="15" y2="12"/>
-                        <line x1="9" y1="16" x2="12" y2="16"/>
+                        <line x1="9" y1="16" x2="13" y2="16"/>
                     </svg>
-                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Transactions</span>
+                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">To Do</span>
                 </button>
                 <!-- Cards -->
                 <button onclick="navigate('cards')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="cards">
@@ -526,6 +523,101 @@
                 <input type="hidden" id="ofr-edit-id" value="">
                 <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white py-3.5 rounded-2xl text-[17px] font-semibold press shadow-lg shadow-indigo-500/25 border border-indigo-400/20" style="min-height:50px;">Save Offer</button>
             </form>
+        </div>
+    </div>
+
+    <!-- ===== TO DO RECORD SHEET ===== -->
+    <div id="sheet-todo-record" class="fixed inset-0 z-50 hidden">
+        <div class="sheet-backdrop absolute inset-0" onclick="closeSheet('sheet-todo-record')"></div>
+        <div class="sheet-panel absolute bottom-0 left-0 right-0 max-w-lg mx-auto rounded-t-[32px] max-h-[90vh] overflow-y-auto bg-slate-900/90 backdrop-blur-2xl border-t border-white/10" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+            <div class="flex justify-center pt-3 pb-1 sheet-handle cursor-grab">
+                <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+            </div>
+            <div class="flex justify-between items-center px-5 pb-3">
+                <button onclick="closeSheet('sheet-todo-record')" class="text-indigo-400 text-[17px] font-medium press">Cancel</button>
+                <h2 id="todo-record-title" class="text-[17px] font-semibold text-white">Record Transaction</h2>
+                <div class="flex items-center gap-2">
+                    <div id="todo-record-dot" class="w-2 h-2 rounded-full" style="background:#6366f1"></div>
+                    <span id="todo-record-source-name" class="text-[13px] text-slate-400"></span>
+                </div>
+            </div>
+            <div class="px-5 pb-5 space-y-4">
+                <!-- Daily Target -->
+                <div>
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">Daily Cashback Target</p>
+                    <div class="flex gap-2">
+                        <div class="flex-1 flex items-center glass-strong rounded-xl px-4 py-3">
+                            <span class="text-[16px] text-slate-500 mr-1">₹</span>
+                            <input type="number" id="todo-target-input" step="1" min="0" inputmode="decimal" class="text-[16px] bg-transparent border-0 w-full p-0 text-white placeholder-slate-500" placeholder="0">
+                        </div>
+                        <button onclick="saveDailyTarget()" class="bg-indigo-600/80 rounded-xl px-4 py-2 text-[14px] font-semibold text-white press flex-shrink-0">Save</button>
+                    </div>
+                </div>
+                <!-- Transaction Amount -->
+                <div>
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">Transaction Amount</p>
+                    <div class="glass-strong rounded-xl overflow-hidden">
+                        <div class="flex items-center px-4 py-3">
+                            <span class="text-[16px] text-slate-500 mr-1">₹</span>
+                            <input type="number" id="todo-amount" required step="0.01" min="0" inputmode="decimal" class="text-[16px] bg-transparent border-0 w-full p-0 text-white placeholder-slate-500" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div id="todo-cashback-preview" class="mt-2 hidden">
+                        <span class="text-[13px] text-emerald-400 font-medium px-1">Expected: <span id="todo-preview-amount">₹0</span></span>
+                    </div>
+                </div>
+                <!-- Merchant -->
+                <div>
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">Merchant</p>
+                    <div class="glass-strong rounded-xl overflow-hidden">
+                        <input type="text" id="todo-merchant" autocomplete="off" autocapitalize="words" class="w-full text-[16px] bg-transparent border-0 px-4 py-3 text-white placeholder-slate-500" placeholder="Enter merchant name">
+                    </div>
+                </div>
+                <!-- Cashback Override -->
+                <div>
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">Cashback Amount</p>
+                    <div class="glass-strong rounded-xl overflow-hidden">
+                        <div class="flex items-center px-4 py-3">
+                            <span class="text-[16px] text-slate-500 mr-1">₹</span>
+                            <input type="number" id="todo-cashback" step="0.01" min="0" value="0" inputmode="decimal" class="text-[16px] bg-transparent border-0 w-full p-0 text-white placeholder-slate-500" placeholder="0.00">
+                        </div>
+                    </div>
+                </div>
+                <!-- UPI Numbers (UPI only) -->
+                <div id="todo-upi-section" class="hidden">
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">UPI Numbers Used</p>
+                    <div class="glass-strong rounded-2xl overflow-hidden">
+                        <div id="todo-upi-list" class="max-h-48 overflow-y-auto no-scrollbar">
+                        </div>
+                        <div class="border-t border-white/5">
+                            <div id="todo-add-upi-row" class="px-4 py-3">
+                                <button onclick="toggleAddUPI()" class="flex items-center gap-2 text-indigo-400 text-[14px] font-medium press">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+                                    Add new UPI number
+                                </button>
+                            </div>
+                            <div id="todo-add-upi-form" class="px-4 pb-3 hidden">
+                                <div class="flex gap-2">
+                                    <input type="text" id="todo-new-upi" class="flex-1 text-[14px] bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500" placeholder="number@upi">
+                                    <input type="text" id="todo-new-upi-label" class="w-24 text-[14px] bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-500" placeholder="Label">
+                                    <button onclick="addUPINumber()" class="bg-indigo-600/80 rounded-xl px-3 py-2 text-[13px] font-semibold text-white press">Add</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Card Info (Cards only) -->
+                <div id="todo-card-section" class="hidden">
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2 px-1">Card</p>
+                    <div class="glass-strong rounded-xl px-4 py-3">
+                        <p id="todo-card-info" class="text-[15px] text-white"></p>
+                    </div>
+                </div>
+                <!-- Record Button -->
+                <button onclick="recordTodoTransaction()" class="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-[17px] press shadow-lg shadow-indigo-500/25 border border-indigo-400/20">
+                    Record Transaction
+                </button>
+            </div>
         </div>
     </div>
 
