@@ -14,5 +14,4 @@ urlpatterns = [
     path('dashboard-stats/', views.dashboard_stats),
     path('todo/', views.todo_list),
     path('todo/record/', views.todo_record),
-    path('todo/set-target/', views.set_daily_target),
 ]

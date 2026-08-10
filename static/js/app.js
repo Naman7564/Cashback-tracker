@@ -276,7 +276,6 @@ function openTodoRecord(sourceId) {
 
     document.getElementById('todo-record-source-name').textContent = s.name;
     document.getElementById('todo-record-dot').style.background = s.color;
-    document.getElementById('todo-target-input').value = item.daily_target || '';
     document.getElementById('todo-amount').value = '';
     document.getElementById('todo-merchant').value = '';
     document.getElementById('todo-cashback').value = '0';
@@ -347,23 +346,6 @@ async function addUPINumber() {
         toast('UPI number added');
     } catch (e) {
         toast('Failed to add', true);
-    }
-}
-
-async function saveDailyTarget() {
-    if (!todoSourceData) return;
-    const amount = document.getElementById('todo-target-input').value;
-    try {
-        await api('todo/set-target/', { method: 'POST', body: {
-            source_id: todoSourceData.source.id,
-            date: todoDate,
-            target_amount: parseFloat(amount) || 0
-        }});
-        haptic(10);
-        toast('Target saved');
-        loadTodo();
-    } catch (e) {
-        toast(e.message || 'Failed to save target', true);
     }
 }
 
@@ -761,6 +743,7 @@ async function saveSource(e) {
         provider: document.getElementById('src-provider').value,
         network: document.getElementById('src-network').value,
         color: document.getElementById('src-color').value,
+        daily_target: parseFloat(document.getElementById('src-daily-target').value) || 0,
     };
     try {
         if (editId) {
@@ -788,6 +771,7 @@ async function editSource(id) {
     document.getElementById('src-provider').value = s.provider;
     document.getElementById('src-network').value = s.network || '';
     document.getElementById('src-color').value = s.color;
+    document.getElementById('src-daily-target').value = s.daily_target || 0;
     const title = document.querySelector('#sheet-source h2');
     title.textContent = 'Edit Source';
     openSheet('sheet-source');

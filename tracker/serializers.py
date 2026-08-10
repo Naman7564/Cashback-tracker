@@ -1,17 +1,11 @@
 from rest_framework import serializers
 from django.db import models as db_models
-from .models import PaymentSource, Offer, Transaction, UPINumber, DailyTarget
+from .models import PaymentSource, Offer, Transaction, UPINumber
 
 
 class UPINumberSerializer(serializers.ModelSerializer):
     class Meta:
         model = UPINumber
-        fields = '__all__'
-
-
-class DailyTargetSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DailyTarget
         fields = '__all__'
 
 

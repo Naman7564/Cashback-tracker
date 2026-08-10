@@ -5,10 +5,10 @@ from django.db.models.functions import Coalesce
 from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import PaymentSource, Offer, Transaction, UPINumber, DailyTarget
+from .models import PaymentSource, Offer, Transaction, UPINumber
 from .serializers import (
     PaymentSourceSerializer, OfferSerializer, TransactionSerializer,
-    UPINumberSerializer, DailyTargetSerializer
+    UPINumberSerializer
 )
 
 
@@ -161,10 +161,9 @@ def todo_list(request):
         txns_today = Transaction.objects.filter(
             source=s, transaction_date=target_date
         ).order_by('-created_at')[:5]
-        target = DailyTarget.objects.filter(source=s, target_date=target_date).first()
         result.append({
             'source': PaymentSourceSerializer(s).data,
-            'daily_target': float(target.target_amount) if target else 0,
+            'daily_target': float(s.daily_target),
             'earned_so_far': float(earned),
             'transactions_today': TransactionSerializer(txns_today, many=True).data,
             'upi_numbers': UPINumberSerializer(s.upi_numbers.filter(is_active=True), many=True).data
@@ -219,20 +218,3 @@ def todo_record(request):
         txn.upi_numbers.set(upi_number_ids)
 
     return Response(TransactionSerializer(txn).data, status=status.HTTP_201_CREATED)
-
-
-@api_view(['POST'])
-def set_daily_target(request):
-    """Set or update daily target for a source."""
-    source_id = request.data.get('source_id')
-    target_date = request.data.get('date', str(date.today()))
-    target_amount = request.data.get('target_amount', 0)
-
-    if not source_id:
-        return Response({'error': 'source_id required'}, status=status.HTTP_400_BAD_REQUEST)
-
-    target, _ = DailyTarget.objects.update_or_create(
-        source_id=source_id, target_date=target_date,
-        defaults={'target_amount': Decimal(str(target_amount))}
-    )
-    return Response(DailyTargetSerializer(target).data)
