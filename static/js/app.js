@@ -1,92 +1,186 @@
-// ponytail: vanilla JS, no TS compile step needed for personal app. Add TS build when team joins.
+/* Cashback Tracker — iOS-native PWA */
+// ponytail: vanilla JS, no TS compile step. Add TS build when team joins.
+
 const API = '/api';
 let currentPage = 'home';
-let txnPage = 1;
-let sources = [];
+let txnPage = 1, txnHasMore = false;
+let statusFilter = '', monthFilter = '', sourceFilter = '';
+let allSources = [];
+let calcTimer = null;
 
-// ===== NAVIGATION =====
+// ──── API Helper ────
+async function api(path, opts = {}) {
+    const url = path.startsWith('http') ? path : `${API}/${path}`;
+    const config = { headers: { 'Content-Type': 'application/json' }, ...opts };
+    if (opts.body && typeof opts.body === 'object') config.body = JSON.stringify(opts.body);
+    const res = await fetch(url, config);
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    return res.json();
+}
+
+// ──── Navigation ────
 function navigate(page) {
-    currentPage = page;
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById(`page-${page}`).classList.add('active');
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-        const isActive = tab.dataset.page === page;
-        tab.classList.toggle('text-indigo-600', isActive);
-        tab.classList.toggle('text-slate-400', !isActive);
-    });
-    // Show FAB only on home/transactions
-    document.getElementById('fab').classList.toggle('hidden', !['home', 'transactions'].includes(page));
-    // Load page data
+    currentPage = page;
+    history.pushState({ page }, '', page === 'home' ? '/' : `/${page}/`);
+    updateTabBar();
+    haptic(10);
     if (page === 'home') loadDashboard();
     else if (page === 'transactions') { txnPage = 1; loadTransactions(); }
     else if (page === 'cards') loadSources();
     else if (page === 'offers') loadOffers();
-    // Update URL without reload
-    const paths = { home: '/', transactions: '/transactions/', cards: '/cards/', offers: '/offers/' };
-    history.pushState({page}, '', paths[page]);
+    window.scrollTo(0, 0);
 }
 
-// ===== API HELPERS =====
-async function api(path, opts = {}) {
-    const url = path.startsWith('http') ? path : `${API}${path}`;
-    const config = { headers: { 'Content-Type': 'application/json' }, ...opts };
-    if (config.body && typeof config.body === 'object') config.body = JSON.stringify(config.body);
-    const res = await fetch(url, config);
-    if (!res.ok) throw new Error(`API error: ${res.status}`);
-    return res.json();
+function updateTabBar() {
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        const isActive = tab.dataset.page === currentPage;
+        const icon = tab.querySelector('.nav-icon');
+        if (isActive) {
+            icon.setAttribute('fill', 'currentColor');
+            tab.classList.add('text-primary-600');
+            tab.classList.remove('text-ios-gray');
+        } else {
+            icon.setAttribute('fill', 'none');
+            tab.classList.remove('text-primary-600');
+            tab.classList.add('text-ios-gray');
+        }
+    });
 }
 
-function toast(msg, type = 'success') {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.className = `fixed top-4 left-4 right-4 px-4 py-3 rounded-xl text-sm font-medium shadow-lg z-50 max-w-lg mx-auto transition-all transform translate-y-0 opacity-100 ${
-        type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-white'
-    }`;
+window.addEventListener('popstate', (e) => {
+    const page = e.state?.page || pathToPage();
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(`page-${page}`).classList.add('active');
+    currentPage = page;
+    updateTabBar();
+});
+
+function pathToPage() {
+    const p = location.pathname.replace(/\//g, '');
+    return ['transactions', 'cards', 'offers'].includes(p) ? p : 'home';
+}
+
+// ──── Bottom Sheet System ────
+function openSheet(id) {
+    const sheet = document.getElementById(id);
+    sheet.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    haptic(10);
+    requestAnimationFrame(() => {
+        sheet.querySelector('.sheet-backdrop').classList.add('open');
+        sheet.querySelector('.sheet-panel').classList.add('open');
+    });
+    if (id === 'sheet-transaction' || id === 'sheet-offer') loadSourceOptions();
+    if (id === 'sheet-transaction' && !document.getElementById('txn-edit-id').value) {
+        document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
+    }
+}
+
+function closeSheet(id) {
+    const sheet = document.getElementById(id);
+    sheet.querySelector('.sheet-backdrop').classList.remove('open');
+    sheet.querySelector('.sheet-panel').classList.remove('open');
     setTimeout(() => {
-        el.classList.add('-translate-y-2', 'opacity-0');
-        setTimeout(() => el.classList.add('hidden'), 300);
-    }, 2500);
+        sheet.classList.add('hidden');
+        document.body.style.overflow = '';
+        const form = sheet.querySelector('form');
+        if (form) form.reset();
+        sheet.querySelectorAll('input[type=hidden]').forEach(h => h.value = '');
+        const statusGroup = document.getElementById('txn-status-group');
+        if (statusGroup) statusGroup.classList.add('hidden');
+        const cashbackPreview = document.getElementById('cashback-preview');
+        if (cashbackPreview) cashbackPreview.classList.add('hidden');
+        // Reset sheet titles
+        const titleMap = { 'sheet-transaction': 'New Transaction', 'sheet-source': 'Add Source', 'sheet-offer': 'Add Offer' };
+        const title = sheet.querySelector('h2');
+        if (title && titleMap[id]) title.textContent = titleMap[id];
+    }, 350);
 }
 
-// ===== DASHBOARD =====
+// Drag-to-dismiss
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.sheet-handle').forEach(handle => {
+        let startY = 0, currentY = 0;
+        const panel = handle.closest('.sheet-panel');
+        const sheet = handle.closest('[id^="sheet-"]');
+
+        handle.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+            panel.style.transition = 'none';
+        });
+        handle.addEventListener('touchmove', (e) => {
+            currentY = e.touches[0].clientY - startY;
+            if (currentY > 0) {
+                panel.style.transform = `translateY(${currentY}px)`;
+                e.preventDefault();
+            }
+        }, { passive: false });
+        handle.addEventListener('touchend', () => {
+            panel.style.transition = '';
+            if (currentY > 100) {
+                closeSheet(sheet.id);
+            } else {
+                panel.style.transform = '';
+                panel.classList.add('open');
+            }
+            currentY = 0;
+        });
+    });
+});
+
+function submitForm(formId) {
+    document.getElementById(formId).requestSubmit();
+}
+
+// ──── Dashboard ────
 async function loadDashboard() {
     try {
-        const data = await api('/dashboard-stats/');
-        document.getElementById('stat-pending').textContent = `₹${Number(data.pending_cashback).toLocaleString('en-IN')}`;
+        const data = await api('dashboard-stats/');
+        document.getElementById('stat-pending').textContent = `₹${fmt(data.pending_cashback)}`;
+        document.getElementById('stat-earned').textContent = `₹${fmt(data.earned_this_month)}`;
         document.getElementById('stat-sources').textContent = data.active_sources;
-        document.getElementById('stat-earned').textContent = `₹${Number(data.earned_this_month).toLocaleString('en-IN')}`;
         document.getElementById('stat-best').textContent = data.best_source || '—';
+
         const container = document.getElementById('recent-transactions');
-        if (data.recent_transactions.length === 0) {
-            container.innerHTML = '<p class="text-sm text-slate-400 py-8 text-center">No transactions yet</p>';
-            return;
+        if (data.recent_transactions?.length) {
+            container.innerHTML = data.recent_transactions.map((t, i) =>
+                `${i > 0 ? '<div class="hairline ml-14"></div>' : ''}` + txnRow(t)
+            ).join('');
+        } else {
+            container.innerHTML = emptyState('clipboard', 'No transactions yet', 'Tap + to add your first one');
         }
-        container.innerHTML = data.recent_transactions.map(txn => txnCard(txn)).join('');
     } catch (e) {
         console.error('Dashboard load failed:', e);
     }
 }
 
-// ===== TRANSACTIONS =====
+// ──── Transactions ────
 async function loadTransactions(append = false) {
+    if (!append) txnPage = 1;
+    let url = `transactions/?page=${txnPage}`;
+    if (statusFilter) url += `&status=${statusFilter}`;
+    if (monthFilter) url += `&statement_month=${monthFilter}`;
+    if (sourceFilter) url += `&source=${sourceFilter}`;
+
     try {
-        let url = `/transactions/?page=${txnPage}`;
-        const month = document.getElementById('filter-month').value;
-        const status = document.getElementById('filter-status').value;
-        const source = document.getElementById('filter-source').value;
-        if (month) url += `&statement_month=${month}`;
-        if (status) url += `&status=${status}`;
-        if (source) url += `&source=${source}`;
-
         const data = await api(url);
-        const container = document.getElementById('transaction-list');
-        const html = data.results.map(txn => txnCard(txn, true)).join('');
-        if (append) container.innerHTML += html;
-        else container.innerHTML = html || '<p class="text-sm text-slate-400 py-8 text-center">No transactions</p>';
+        const list = document.getElementById('transaction-list');
+        const rows = (data.results || []).map((t, i) =>
+            `${i > 0 ? '<div class="hairline ml-14"></div>' : ''}` + txnRow(t, true)
+        ).join('');
 
-        document.getElementById('load-more-txn').classList.toggle('hidden', !data.next);
+        if (append) {
+            list.innerHTML += '<div class="hairline ml-14"></div>' + rows;
+        } else {
+            list.innerHTML = rows || emptyState('clipboard', 'No transactions');
+        }
+
+        txnHasMore = !!data.next;
+        document.getElementById('load-more-txn').classList.toggle('hidden', !txnHasMore);
     } catch (e) {
-        console.error('Transactions load failed:', e);
+        console.error('Transaction load failed:', e);
     }
 }
 
@@ -95,250 +189,355 @@ function loadMoreTransactions() {
     loadTransactions(true);
 }
 
-function txnCard(txn, showFull = false) {
+function txnRow(t, swipeable = false) {
     const statusColors = {
-        pending: 'bg-amber-100 text-amber-700',
-        received: 'bg-emerald-100 text-emerald-700',
-        disputed: 'bg-rose-100 text-rose-700',
-        na: 'bg-slate-100 text-slate-500'
+        pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+        received: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+        disputed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+        na: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
     };
-    const badge = statusColors[txn.status] || statusColors.na;
-    return `
-    <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex items-center justify-between" onclick="editTransaction(${txn.id})">
-        <div class="flex items-center gap-3 min-w-0">
-            <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${txn.source_color || '#6366f1'}"></div>
-            <div class="min-w-0">
-                <p class="text-sm font-medium text-slate-800 truncate">${txn.merchant}</p>
-                <p class="text-xs text-slate-500">${txn.source_name || ''}${showFull ? ' · ' + txn.transaction_date : ''}</p>
-            </div>
-        </div>
-        <div class="text-right flex-shrink-0 ml-2">
-            <p class="text-sm font-semibold text-slate-800">₹${Number(txn.amount).toLocaleString('en-IN')}</p>
-            <div class="flex items-center gap-1.5 justify-end mt-0.5">
-                ${txn.expected_cashback > 0 ? `<span class="text-[10px] text-emerald-600">₹${txn.expected_cashback}</span>` : ''}
-                <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badge}">${txn.status}</span>
-            </div>
-        </div>
-    </div>`;
-}
+    const statusColor = statusColors[t.status] || statusColors.na;
+    const date = new Date(t.transaction_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    const cashback = t.status === 'received' && t.actual_cashback
+        ? `<span class="text-[13px] text-ios-green font-medium">+₹${fmt(t.actual_cashback)}</span>`
+        : t.expected_cashback > 0
+            ? `<span class="text-[13px] text-ios-gray">~₹${fmt(t.expected_cashback)}</span>`
+            : '';
 
-// ===== SOURCES =====
-async function loadSources() {
-    try {
-        const data = await api('/sources/');
-        sources = data.results || data;
-        const container = document.getElementById('source-list');
-        if (sources.length === 0) {
-            container.innerHTML = '<p class="text-sm text-slate-400 py-8 text-center">No payment sources</p>';
-            return;
-        }
-        container.innerHTML = sources.map(src => `
-        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100 flex items-center justify-between">
-            <div class="flex items-center gap-3 min-w-0">
-                <div class="w-3 h-3 rounded-full flex-shrink-0" style="background:${src.color}"></div>
-                <div class="min-w-0">
-                <p class="text-sm font-semibold text-slate-800">${src.name}</p>
-                <p class="text-xs text-slate-500">${src.provider} · ${src.source_type.toUpperCase()}${src.network ? ' · ' + src.network : ''}</p>
-                <p class="text-xs font-medium text-emerald-600 mt-1">Earned: ₹${Number(src.total_earned || 0).toLocaleString('en-IN')}</p>
+    const inner = `
+        <div class="flex items-center px-4 py-3 press" onclick="editTransaction(${t.id})">
+            <div class="w-3 h-3 rounded-full flex-shrink-0 mr-3" style="background:${t.source_color || '#6366f1'}"></div>
+            <div class="flex-1 min-w-0">
+                <p class="text-[17px] font-semibold text-gray-900 dark:text-white truncate">${esc(t.merchant)}</p>
+                <p class="text-[13px] text-ios-gray mt-0.5">${esc(t.source_name || '')} · ${date}</p>
+            </div>
+            <div class="text-right ml-3 flex-shrink-0">
+                <p class="text-[17px] font-semibold text-gray-900 dark:text-white">₹${fmt(t.amount)}</p>
+                <div class="flex items-center justify-end gap-1.5 mt-0.5">
+                    ${cashback}
+                    <span class="text-[11px] font-medium px-1.5 py-0.5 rounded-full ${statusColor}">${t.status}</span>
                 </div>
             </div>
-            <div class="flex items-center gap-3 flex-shrink-0">
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" ${src.is_active ? 'checked' : ''} onchange="toggleSource(${src.id}, this.checked)" class="sr-only peer">
-                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                </label>
-                <button onclick="editSource(${src.id})" class="text-slate-400 hover:text-slate-600">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-                </button>
+            <svg class="w-4 h-4 text-ios-gray ml-1 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        </div>`;
+
+    if (!swipeable) return inner;
+
+    return `
+        <div class="swipe-row" data-id="${t.id}">
+            <div class="swipe-actions swipe-actions-right">
+                <button onclick="quickStatus(${t.id},'received')" class="bg-ios-green text-white px-4 flex items-center text-[13px] font-medium">Received</button>
+                <button onclick="quickStatus(${t.id},'disputed')" class="bg-ios-orange text-white px-4 flex items-center text-[13px] font-medium">Dispute</button>
             </div>
-        </div>`).join('');
-        populateSourceDropdowns();
+            <div class="swipe-content bg-white dark:bg-ios-gray6">${inner}</div>
+        </div>`;
+}
+
+// ──── Swipe Actions ────
+document.addEventListener('DOMContentLoaded', () => {
+    const txnList = document.getElementById('transaction-list');
+    let activeRow = null, startX = 0, currentX = 0;
+
+    txnList.addEventListener('touchstart', (e) => {
+        const row = e.target.closest('.swipe-row');
+        if (!row) return;
+        if (activeRow && activeRow !== row) resetSwipe(activeRow);
+        activeRow = row;
+        startX = e.touches[0].clientX;
+        row.querySelector('.swipe-content').style.transition = 'none';
+    });
+
+    txnList.addEventListener('touchmove', (e) => {
+        if (!activeRow) return;
+        currentX = e.touches[0].clientX - startX;
+        if (currentX > 0) currentX = 0;
+        const content = activeRow.querySelector('.swipe-content');
+        const x = Math.max(currentX, -160);
+        content.style.transform = `translateX(${x}px)`;
+    });
+
+    txnList.addEventListener('touchend', () => {
+        if (!activeRow) return;
+        const content = activeRow.querySelector('.swipe-content');
+        content.style.transition = '';
+        if (currentX < -60) {
+            content.style.transform = 'translateX(-160px)';
+        } else {
+            content.style.transform = '';
+        }
+        currentX = 0;
+    });
+
+    document.addEventListener('touchstart', (e) => {
+        if (activeRow && !e.target.closest('.swipe-row')) {
+            resetSwipe(activeRow);
+            activeRow = null;
+        }
+    });
+});
+
+function resetSwipe(row) {
+    const content = row.querySelector('.swipe-content');
+    content.style.transition = '';
+    content.style.transform = '';
+}
+
+async function quickStatus(id, status) {
+    try {
+        await api(`transactions/${id}/`, { method: 'PATCH', body: { status } });
+        haptic(20);
+        toast(`Marked as ${status}`);
+        if (currentPage === 'home') loadDashboard();
+        else loadTransactions();
+    } catch (e) {
+        toast('Failed to update', true);
+    }
+}
+
+// ──── Sources ────
+async function loadSources() {
+    try {
+        const data = await api('sources/');
+        allSources = data.results || data;
+        const container = document.getElementById('source-list');
+        if (!allSources.length) {
+            container.innerHTML = `<div class="bg-white dark:bg-ios-gray6 rounded-xl">${emptyState('card', 'No payment sources', 'Add your cards and UPI apps')}</div>`;
+            return;
+        }
+        container.innerHTML = `<div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+            ${allSources.map((s, i) => `${i > 0 ? '<div class="hairline ml-14"></div>' : ''}${sourceRow(s)}`).join('')}
+        </div>`;
     } catch (e) {
         console.error('Sources load failed:', e);
     }
 }
 
+function sourceRow(s) {
+    const typeLabel = { credit: 'Credit', debit: 'Debit', upi: 'UPI' }[s.source_type] || s.source_type;
+    return `
+        <div class="flex items-center px-4 py-3 press" onclick="editSource(${s.id})">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mr-3" style="background:${s.color}20">
+                <div class="w-3 h-3 rounded-full" style="background:${s.color}"></div>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-[17px] font-semibold text-gray-900 dark:text-white truncate">${esc(s.name)}</p>
+                <p class="text-[13px] text-ios-gray mt-0.5">${esc(s.provider)} · ${typeLabel}${s.network ? ' · ' + s.network : ''}</p>
+            </div>
+            <div class="text-right ml-3 flex-shrink-0">
+                <p class="text-[15px] font-semibold text-ios-green">₹${fmt(s.total_earned || 0)}</p>
+                <button onclick="event.stopPropagation();toggleSource(${s.id},${!s.is_active})"
+                    class="mt-1 w-12 h-7 rounded-full relative transition-colors ${s.is_active ? 'bg-ios-green' : 'bg-gray-300 dark:bg-ios-gray4'}">
+                    <div class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${s.is_active ? 'left-[22px]' : 'left-0.5'}"></div>
+                </button>
+            </div>
+        </div>`;
+}
+
 async function toggleSource(id, active) {
     try {
-        await api(`/sources/${id}/`, { method: 'PATCH', body: { is_active: active } });
-        toast(active ? 'Source activated' : 'Source deactivated');
+        await api(`sources/${id}/`, { method: 'PATCH', body: { is_active: active } });
+        haptic(10);
+        loadSources();
     } catch (e) {
-        toast('Failed to update', 'error');
+        toast('Failed to toggle', true);
     }
 }
 
-// ===== OFFERS =====
+// ──── Offers ────
 async function loadOffers() {
     try {
-        const data = await api('/offers/?is_active=true');
+        const data = await api('offers/?is_active=true');
         const offers = data.results || data;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = new Date().toISOString().split('T')[0];
+        const sevenDays = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+        const expiring = offers.filter(o => o.valid_until <= sevenDays && o.valid_until >= today);
+        const rest = offers.filter(o => o.valid_until > sevenDays);
 
-        const expiring = [];
-        const active = [];
-        offers.forEach(ofr => {
-            const until = new Date(ofr.valid_until);
-            const daysLeft = Math.ceil((until - today) / 86400000);
-            ofr._daysLeft = daysLeft;
-            if (daysLeft <= 7 && daysLeft >= 0) expiring.push(ofr);
-            else if (daysLeft > 7) active.push(ofr);
-        });
+        const expiringSection = document.getElementById('expiring-section');
+        const expiringList = document.getElementById('expiring-offers');
+        if (expiring.length) {
+            expiringSection.classList.remove('hidden');
+            expiringList.innerHTML = expiring.map((o, i) =>
+                `${i > 0 ? '<div class="hairline ml-4"></div>' : ''}${offerRow(o, true)}`
+            ).join('');
+        } else {
+            expiringSection.classList.add('hidden');
+        }
 
-        const section = document.getElementById('expiring-section');
-        section.classList.toggle('hidden', expiring.length === 0);
-        document.getElementById('expiring-offers').innerHTML = expiring.map(ofr => offerCard(ofr, true)).join('');
-        const container = document.getElementById('offer-list');
-        container.innerHTML = active.length
-            ? active.map(ofr => offerCard(ofr)).join('')
-            : '<p class="text-sm text-slate-400 py-8 text-center">No active offers</p>';
+        const offerList = document.getElementById('offer-list');
+        if (rest.length) {
+            offerList.innerHTML = rest.map((o, i) =>
+                `${i > 0 ? '<div class="hairline ml-4"></div>' : ''}${offerRow(o)}`
+            ).join('');
+        } else if (!expiring.length) {
+            offerList.innerHTML = emptyState('tag', 'No active offers');
+        } else {
+            offerList.innerHTML = '';
+        }
     } catch (e) {
         console.error('Offers load failed:', e);
     }
 }
 
-function offerCard(ofr, urgent = false) {
-    const detail = ofr.offer_type === 'percentage'
-        ? `${ofr.value}% cashback${ofr.max_cap ? ` (max ₹${ofr.max_cap})` : ''}`
-        : `Flat ₹${ofr.value}`;
-    const badgeClass = ofr._daysLeft <= 2 ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700';
+function offerRow(o, isExpiring = false) {
+    const value = o.offer_type === 'percentage' ? `${o.value}%` : `₹${fmt(o.value)}`;
+    const cap = o.max_cap ? ` (max ₹${fmt(o.max_cap)})` : '';
+    const days = Math.ceil((new Date(o.valid_until) - new Date()) / 86400000);
+    const expiry = isExpiring
+        ? `<span class="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400">${days}d left</span>`
+        : `<span class="text-[13px] text-ios-gray">until ${new Date(o.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>`;
+
     return `
-    <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100" onclick="editOffer(${ofr.id})">
-        <div class="flex items-start justify-between">
-            <div class="min-w-0">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-xs font-medium bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full">${ofr.category}</span>
-                    <span class="text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badgeClass}">${ofr._daysLeft}d left</span>
-                </div>
-                <p class="text-sm font-semibold text-slate-800">${detail}</p>
-                <p class="text-xs text-slate-500 mt-0.5">${ofr.source_name || 'Source'} · ${ofr.valid_from} to ${ofr.valid_until}</p>
+        <div class="flex items-center px-4 py-3 press" onclick="editOffer(${o.id})">
+            <div class="flex-1 min-w-0">
+                <p class="text-[17px] font-semibold text-gray-900 dark:text-white">${esc(o.category)}</p>
+                <p class="text-[13px] text-ios-gray mt-0.5">${esc(o.source_name || '')}</p>
             </div>
-        </div>
-    </div>`;
+            <div class="text-right ml-3 flex-shrink-0">
+                <p class="text-[17px] font-semibold text-primary-600 dark:text-primary-500">${value}${cap}</p>
+                ${expiry}
+            </div>
+            <svg class="w-4 h-4 text-ios-gray ml-1 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        </div>`;
 }
 
-// ===== MODALS =====
-function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-function openTransactionModal() {
-    document.getElementById('form-transaction').reset();
-    document.getElementById('txn-edit-id').value = '';
-    document.getElementById('txn-offer-id').value = '';
-    document.getElementById('cashback-preview').classList.add('hidden');
-    document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
-    populateSourceDropdowns();
-    openModal('modal-transaction');
-}
-
-function openSourceModal() {
-    document.getElementById('form-source').reset();
-    document.getElementById('src-edit-id').value = '';
-    document.getElementById('src-color').value = '#6366f1';
-    openModal('modal-source');
-}
-
-function openOfferModal() {
-    document.getElementById('form-offer').reset();
-    document.getElementById('ofr-edit-id').value = '';
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('ofr-from').value = today;
-    populateSourceDropdowns();
-    openModal('modal-offer');
-}
-
-// ===== POPULATE DROPDOWNS =====
-async function populateSourceDropdowns() {
-    if (sources.length === 0) {
+// ──── Source Options (for dropdowns) ────
+async function loadSourceOptions() {
+    if (allSources.length === 0) {
         try {
-            const data = await api('/sources/');
-            sources = data.results || data;
+            const data = await api('sources/?is_active=true');
+            allSources = data.results || data;
         } catch (e) { return; }
     }
-    const opts = sources.map(s => `<option value="${s.id}">${s.name} (${s.provider})</option>`).join('');
-    ['txn-source', 'ofr-source'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = '<option value="">Select source...</option>' + opts;
+    ['txn-source', 'ofr-source', 'filter-source'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const current = sel.value;
+        const firstOpt = id === 'filter-source' ? '<option value="">All Sources</option>' : '<option value="">Select...</option>';
+        sel.innerHTML = firstOpt + allSources.map(s =>
+            `<option value="${s.id}" ${s.id == current ? 'selected' : ''}>${esc(s.name)}</option>`
+        ).join('');
     });
-    const filterSource = document.getElementById('filter-source');
-    if (filterSource) filterSource.innerHTML = '<option value="">All Sources</option>' + opts;
 }
 
-// ===== AUTO-CALCULATE CASHBACK =====
-let calcTimeout;
+// ──── Auto Cashback Calc ────
 function setupCashbackCalc() {
     ['txn-source', 'txn-amount', 'txn-category'].forEach(id => {
-        document.getElementById(id).addEventListener('input', () => {
-            clearTimeout(calcTimeout);
-            calcTimeout = setTimeout(calcCashback, 400);
-        });
-        document.getElementById(id).addEventListener('change', () => {
-            clearTimeout(calcTimeout);
-            calcTimeout = setTimeout(calcCashback, 200);
-        });
+        document.getElementById(id).addEventListener('input', debouncedCalc);
+        document.getElementById(id).addEventListener('change', debouncedCalc);
     });
+}
+
+function debouncedCalc() {
+    clearTimeout(calcTimer);
+    calcTimer = setTimeout(calcCashback, 400);
 }
 
 async function calcCashback() {
-    const sourceId = document.getElementById('txn-source').value;
+    const source = document.getElementById('txn-source').value;
     const amount = document.getElementById('txn-amount').value;
     const category = document.getElementById('txn-category').value;
-    if (!sourceId || !amount) return;
+    if (!source || !amount) return;
 
     try {
-        const data = await api('/calculate-cashback/', {
+        const data = await api('calculate-cashback/', {
             method: 'POST',
-            body: { source_id: sourceId, amount: parseFloat(amount), category }
+            body: { source_id: parseInt(source), amount: parseFloat(amount), category }
         });
         const preview = document.getElementById('cashback-preview');
-        if (data.expected_cashback > 0) {
+        if (data.cashback > 0) {
             preview.classList.remove('hidden');
-            document.getElementById('preview-amount').textContent = `₹${data.expected_cashback}`;
-            document.getElementById('preview-offer').textContent = data.offer_details
-                ? `${data.offer_details.offer_type === 'percentage' ? data.offer_details.value + '%' : '₹' + data.offer_details.value} on ${data.offer_details.category}`
-                : '';
-            document.getElementById('txn-cashback').value = data.expected_cashback;
+            document.getElementById('preview-amount').textContent = `₹${fmt(data.cashback)}`;
+            document.getElementById('preview-offer').textContent = data.offer_description || '';
+            document.getElementById('txn-cashback').value = data.cashback;
             document.getElementById('txn-offer-id').value = data.offer_id || '';
         } else {
             preview.classList.add('hidden');
-            document.getElementById('txn-cashback').value = '0';
-            document.getElementById('txn-offer-id').value = '';
         }
     } catch (e) { /* silent */ }
 }
 
-// ===== SAVE HANDLERS =====
+// ──── CRUD: Transaction ────
 async function saveTransaction(e) {
     e.preventDefault();
     const editId = document.getElementById('txn-edit-id').value;
     const body = {
         source: parseInt(document.getElementById('txn-source').value),
-        amount: document.getElementById('txn-amount').value,
+        amount: parseFloat(document.getElementById('txn-amount').value),
         merchant: document.getElementById('txn-merchant').value,
         category: document.getElementById('txn-category').value,
         transaction_date: document.getElementById('txn-date').value,
-        expected_cashback: document.getElementById('txn-cashback').value || '0',
+        expected_cashback: parseFloat(document.getElementById('txn-cashback').value) || 0,
         notes: document.getElementById('txn-notes').value,
     };
     const offerId = document.getElementById('txn-offer-id').value;
     if (offerId) body.offer = parseInt(offerId);
 
+    const status = document.getElementById('txn-status').value;
+    if (status) body.status = status;
+    const actual = document.getElementById('txn-actual').value;
+    if (actual !== '') body.actual_cashback = parseFloat(actual);
+
     try {
         if (editId) {
-            await api(`/transactions/${editId}/`, { method: 'PUT', body });
-            toast('Transaction updated');
+            await api(`transactions/${editId}/`, { method: 'PUT', body });
         } else {
-            await api('/transactions/', { method: 'POST', body });
-            toast('Transaction added');
+            await api('transactions/', { method: 'POST', body });
         }
-        closeModal('modal-transaction');
+        haptic(20);
+        closeSheet('sheet-transaction');
+        toast(editId ? 'Transaction updated' : 'Transaction added');
         if (currentPage === 'home') loadDashboard();
-        else if (currentPage === 'transactions') { txnPage = 1; loadTransactions(); }
+        else loadTransactions();
     } catch (e) {
-        toast('Failed to save', 'error');
+        haptic([50, 50, 50]);
+        toast('Failed to save', true);
     }
 }
 
+async function editTransaction(id) {
+    try {
+        const t = await api(`transactions/${id}/`);
+        document.getElementById('txn-edit-id').value = t.id;
+        document.getElementById('txn-source').value = t.source;
+        document.getElementById('txn-amount').value = t.amount;
+        document.getElementById('txn-merchant').value = t.merchant;
+        document.getElementById('txn-category').value = t.category || '';
+        document.getElementById('txn-date').value = t.transaction_date;
+        document.getElementById('txn-cashback').value = t.expected_cashback;
+        document.getElementById('txn-notes').value = t.notes || '';
+        document.getElementById('txn-offer-id').value = t.offer || '';
+
+        document.getElementById('txn-status-group').classList.remove('hidden');
+        setTxnStatus(t.status);
+        if (t.actual_cashback != null) {
+            document.getElementById('txn-actual').value = t.actual_cashback;
+        }
+
+        const title = document.querySelector('#sheet-transaction h2');
+        title.textContent = 'Edit Transaction';
+        openSheet('sheet-transaction');
+    } catch (e) {
+        toast('Failed to load transaction', true);
+    }
+}
+
+function setTxnStatus(status) {
+    document.getElementById('txn-status').value = status;
+    document.querySelectorAll('.txn-status-btn').forEach(btn => {
+        const val = btn.textContent.trim().toLowerCase();
+        if (val === status) {
+            btn.classList.add('bg-primary-600', 'text-white');
+            btn.classList.remove('text-gray-600', 'dark:text-ios-gray');
+        } else {
+            btn.classList.remove('bg-primary-600', 'text-white');
+            btn.classList.add('text-gray-600', 'dark:text-ios-gray');
+        }
+    });
+    document.getElementById('actual-cashback-group').classList.toggle('hidden', status !== 'received');
+}
+
+// ──── CRUD: Source ────
 async function saveSource(e) {
     e.preventDefault();
     const editId = document.getElementById('src-edit-id').value;
@@ -351,20 +550,36 @@ async function saveSource(e) {
     };
     try {
         if (editId) {
-            await api(`/sources/${editId}/`, { method: 'PUT', body });
-            toast('Source updated');
+            await api(`sources/${editId}/`, { method: 'PUT', body });
         } else {
-            await api('/sources/', { method: 'POST', body });
-            toast('Source added');
+            await api('sources/', { method: 'POST', body });
         }
-        closeModal('modal-source');
-        sources = []; // Force refresh
+        haptic(20);
+        closeSheet('sheet-source');
+        toast(editId ? 'Source updated' : 'Source added');
+        allSources = [];
         loadSources();
     } catch (e) {
-        toast('Failed to save', 'error');
+        haptic([50, 50, 50]);
+        toast('Failed to save', true);
     }
 }
 
+async function editSource(id) {
+    const s = allSources.find(s => s.id === id);
+    if (!s) return;
+    document.getElementById('src-edit-id').value = s.id;
+    document.getElementById('src-name').value = s.name;
+    document.getElementById('src-type').value = s.source_type;
+    document.getElementById('src-provider').value = s.provider;
+    document.getElementById('src-network').value = s.network || '';
+    document.getElementById('src-color').value = s.color;
+    const title = document.querySelector('#sheet-source h2');
+    title.textContent = 'Edit Source';
+    openSheet('sheet-source');
+}
+
+// ──── CRUD: Offer ────
 async function saveOffer(e) {
     e.preventDefault();
     const editId = document.getElementById('ofr-edit-id').value;
@@ -372,188 +587,197 @@ async function saveOffer(e) {
         source: parseInt(document.getElementById('ofr-source').value),
         category: document.getElementById('ofr-category').value,
         offer_type: document.getElementById('ofr-type').value,
-        value: document.getElementById('ofr-value').value,
-        max_cap: document.getElementById('ofr-cap').value || null,
+        value: parseFloat(document.getElementById('ofr-value').value),
         valid_from: document.getElementById('ofr-from').value,
         valid_until: document.getElementById('ofr-until').value,
         terms: document.getElementById('ofr-terms').value,
     };
+    const cap = document.getElementById('ofr-cap').value;
+    if (cap) body.max_cap = parseFloat(cap);
+
     try {
         if (editId) {
-            await api(`/offers/${editId}/`, { method: 'PUT', body });
-            toast('Offer updated');
+            await api(`offers/${editId}/`, { method: 'PUT', body });
         } else {
-            await api('/offers/', { method: 'POST', body });
-            toast('Offer added');
+            await api('offers/', { method: 'POST', body });
         }
-        closeModal('modal-offer');
+        haptic(20);
+        closeSheet('sheet-offer');
+        toast(editId ? 'Offer updated' : 'Offer added');
         loadOffers();
     } catch (e) {
-        toast('Failed to save', 'error');
+        haptic([50, 50, 50]);
+        toast('Failed to save', true);
     }
-}
-
-// ===== EDIT HANDLERS =====
-async function editTransaction(id) {
-    try {
-        const txn = await api(`/transactions/${id}/`);
-        document.getElementById('txn-edit-id').value = id;
-        document.getElementById('txn-source').value = txn.source;
-        document.getElementById('txn-amount').value = txn.amount;
-        document.getElementById('txn-merchant').value = txn.merchant;
-        document.getElementById('txn-category').value = txn.category || '';
-        document.getElementById('txn-date').value = txn.transaction_date;
-        document.getElementById('txn-cashback').value = txn.expected_cashback;
-        document.getElementById('txn-notes').value = txn.notes || '';
-        document.getElementById('txn-offer-id').value = txn.offer || '';
-
-        // Add status selector for editing
-        const form = document.getElementById('form-transaction');
-        let statusDiv = document.getElementById('txn-status-group');
-        if (!statusDiv) {
-            statusDiv = document.createElement('div');
-            statusDiv.id = 'txn-status-group';
-            statusDiv.innerHTML = `
-                <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                <div class="flex gap-2">
-                    <button type="button" onclick="setTxnStatus('pending')" class="txn-status-btn flex-1 py-2 rounded-lg text-xs font-medium border border-slate-200">Pending</button>
-                    <button type="button" onclick="setTxnStatus('received')" class="txn-status-btn flex-1 py-2 rounded-lg text-xs font-medium border border-slate-200">Received</button>
-                    <button type="button" onclick="setTxnStatus('disputed')" class="txn-status-btn flex-1 py-2 rounded-lg text-xs font-medium border border-slate-200">Disputed</button>
-                </div>
-                <input type="hidden" id="txn-status" value="">
-                <div id="actual-cashback-group" class="mt-3 hidden">
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Actual Cashback (₹)</label>
-                    <input type="number" id="txn-actual" step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
-                </div>`;
-            form.querySelector('button[type="submit"]').before(statusDiv);
-        }
-        statusDiv.classList.remove('hidden');
-        setTxnStatus(txn.status);
-        if (txn.actual_cashback !== null) document.getElementById('txn-actual').value = txn.actual_cashback;
-        populateSourceDropdowns();
-        setTimeout(() => document.getElementById('txn-source').value = txn.source, 100);
-        openModal('modal-transaction');
-    } catch (e) { toast('Failed to load', 'error'); }
-}
-
-function setTxnStatus(status) {
-    document.getElementById('txn-status').value = status;
-    document.querySelectorAll('.txn-status-btn').forEach(btn => {
-        btn.classList.remove('bg-amber-100', 'text-amber-700', 'bg-emerald-100', 'text-emerald-700', 'bg-rose-100', 'text-rose-700', 'border-transparent');
-        btn.classList.add('border-slate-200', 'text-slate-600');
-    });
-    const colors = { pending: ['bg-amber-100', 'text-amber-700'], received: ['bg-emerald-100', 'text-emerald-700'], disputed: ['bg-rose-100', 'text-rose-700'] };
-    const btns = document.querySelectorAll('.txn-status-btn');
-    const idx = ['pending', 'received', 'disputed'].indexOf(status);
-    if (idx >= 0 && btns[idx]) {
-        btns[idx].classList.add(...colors[status], 'border-transparent');
-        btns[idx].classList.remove('border-slate-200', 'text-slate-600');
-    }
-    document.getElementById('actual-cashback-group').classList.toggle('hidden', status !== 'received');
-}
-
-// Override saveTransaction to include status/actual when editing
-const _origSaveTxn = saveTransaction;
-saveTransaction = async function(e) {
-    e.preventDefault();
-    const editId = document.getElementById('txn-edit-id').value;
-    const body = {
-        source: parseInt(document.getElementById('txn-source').value),
-        amount: document.getElementById('txn-amount').value,
-        merchant: document.getElementById('txn-merchant').value,
-        category: document.getElementById('txn-category').value,
-        transaction_date: document.getElementById('txn-date').value,
-        expected_cashback: document.getElementById('txn-cashback').value || '0',
-        notes: document.getElementById('txn-notes').value,
-    };
-    const offerId = document.getElementById('txn-offer-id').value;
-    if (offerId) body.offer = parseInt(offerId);
-    if (editId) {
-        const statusEl = document.getElementById('txn-status');
-        if (statusEl && statusEl.value) body.status = statusEl.value;
-        const actualEl = document.getElementById('txn-actual');
-        if (actualEl && actualEl.value) body.actual_cashback = actualEl.value;
-    }
-    try {
-        if (editId) {
-            await api(`/transactions/${editId}/`, { method: 'PUT', body });
-            toast('Transaction updated');
-        } else {
-            await api('/transactions/', { method: 'POST', body });
-            toast('Transaction added');
-        }
-        closeModal('modal-transaction');
-        // Hide status group for next add
-        const sg = document.getElementById('txn-status-group');
-        if (sg) sg.classList.add('hidden');
-        if (currentPage === 'home') loadDashboard();
-        else if (currentPage === 'transactions') { txnPage = 1; loadTransactions(); }
-    } catch (e) {
-        toast('Failed to save', 'error');
-    }
-};
-
-async function editSource(id) {
-    try {
-        const src = await api(`/sources/${id}/`);
-        document.getElementById('src-edit-id').value = id;
-        document.getElementById('src-name').value = src.name;
-        document.getElementById('src-type').value = src.source_type;
-        document.getElementById('src-provider').value = src.provider;
-        document.getElementById('src-network').value = src.network || '';
-        document.getElementById('src-color').value = src.color;
-        openModal('modal-source');
-    } catch (e) { toast('Failed to load', 'error'); }
 }
 
 async function editOffer(id) {
     try {
-        const ofr = await api(`/offers/${id}/`);
-        document.getElementById('ofr-edit-id').value = id;
-        document.getElementById('ofr-source').value = ofr.source;
-        document.getElementById('ofr-category').value = ofr.category;
-        document.getElementById('ofr-type').value = ofr.offer_type;
-        document.getElementById('ofr-value').value = ofr.value;
-        document.getElementById('ofr-cap').value = ofr.max_cap || '';
-        document.getElementById('ofr-from').value = ofr.valid_from;
-        document.getElementById('ofr-until').value = ofr.valid_until;
-        document.getElementById('ofr-terms').value = ofr.terms || '';
-        populateSourceDropdowns();
-        setTimeout(() => document.getElementById('ofr-source').value = ofr.source, 100);
-        openModal('modal-offer');
-    } catch (e) { toast('Failed to load', 'error'); }
+        const o = await api(`offers/${id}/`);
+        document.getElementById('ofr-edit-id').value = o.id;
+        document.getElementById('ofr-source').value = o.source;
+        document.getElementById('ofr-category').value = o.category;
+        document.getElementById('ofr-type').value = o.offer_type;
+        document.getElementById('ofr-value').value = o.value;
+        document.getElementById('ofr-cap').value = o.max_cap || '';
+        document.getElementById('ofr-from').value = o.valid_from;
+        document.getElementById('ofr-until').value = o.valid_until;
+        document.getElementById('ofr-terms').value = o.terms || '';
+        const title = document.querySelector('#sheet-offer h2');
+        title.textContent = 'Edit Offer';
+        openSheet('sheet-offer');
+    } catch (e) {
+        toast('Failed to load offer', true);
+    }
 }
 
-// ===== INIT =====
-function init() {
-    // Route based on URL
-    const path = window.location.pathname;
-    if (path.includes('transactions')) navigate('transactions');
-    else if (path.includes('cards')) navigate('cards');
-    else if (path.includes('offers')) navigate('offers');
-    else navigate('home');
+// ──── Status Filter (Segmented Control) ────
+function setStatusFilter(val) {
+    statusFilter = val;
+    document.querySelectorAll('.status-seg').forEach(btn => {
+        if (btn.dataset.val === val) {
+            btn.classList.add('bg-white', 'dark:bg-ios-gray4', 'shadow-sm');
+            btn.classList.remove('text-ios-gray');
+        } else {
+            btn.classList.remove('bg-white', 'dark:bg-ios-gray4', 'shadow-sm');
+            btn.classList.add('text-ios-gray');
+        }
+    });
+    haptic(10);
+    loadTransactions();
+}
 
-    setupCashbackCalc();
+// ──── Pull to Refresh ────
+function setupPullToRefresh() {
+    const page = document.getElementById('page-transactions');
+    let startY = 0, pulling = false;
+    const spinner = document.getElementById('ptr-spinner');
 
-    // Populate month filter
-    const monthSelect = document.getElementById('filter-month');
+    page.addEventListener('touchstart', (e) => {
+        if (window.scrollY === 0) {
+            startY = e.touches[0].clientY;
+            pulling = true;
+        }
+    });
+    page.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 20) spinner.classList.add('active');
+    });
+    page.addEventListener('touchend', () => {
+        if (spinner.classList.contains('active')) {
+            loadTransactions().then(() => {
+                spinner.classList.remove('active');
+                haptic(10);
+            });
+        }
+        pulling = false;
+    });
+}
+
+// ──── Haptic Feedback ────
+function haptic(pattern) {
+    if ('vibrate' in navigator) navigator.vibrate(pattern);
+}
+
+// ──── Toast ────
+function toast(msg, isError = false) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `fixed left-4 right-4 px-4 py-3 rounded-xl text-[15px] font-medium shadow-lg z-[60] max-w-lg mx-auto transition-all transform ${isError ? 'bg-ios-red' : 'bg-gray-800 dark:bg-ios-gray5'} text-white`;
+    el.style.top = `calc(env(safe-area-inset-top, 0px) + 8px)`;
+    el.classList.remove('hidden', '-translate-y-2', 'opacity-0');
+    setTimeout(() => {
+        el.classList.add('-translate-y-2', 'opacity-0');
+        setTimeout(() => el.classList.add('hidden'), 300);
+    }, 2500);
+}
+
+// ──── Utilities ────
+function fmt(n) {
+    const num = parseFloat(n) || 0;
+    return num.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function esc(str) {
+    if (!str) return '';
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+function emptyState(icon, title, subtitle = '') {
+    const icons = {
+        clipboard: '<path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>',
+        card: '<path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>',
+        tag: '<path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/>'
+    };
+    return `<div class="py-12 text-center">
+        <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-ios-gray3 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">${icons[icon] || icons.clipboard}</svg>
+        <p class="text-[17px] font-semibold text-gray-500 dark:text-ios-gray">${title}</p>
+        ${subtitle ? `<p class="text-[15px] text-ios-gray mt-1">${subtitle}</p>` : ''}
+    </div>`;
+}
+
+// ──── Month Filter ────
+function populateMonths() {
+    const sel = document.getElementById('filter-month');
     const now = new Date();
     for (let i = 0; i < 12; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         const label = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-        monthSelect.innerHTML += `<option value="${val}">${label}</option>`;
+        sel.innerHTML += `<option value="${val}">${label}</option>`;
     }
+}
 
-    // Filter change handlers
-    ['filter-month', 'filter-status', 'filter-source'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => { txnPage = 1; loadTransactions(); });
-    });
+// ──── Standalone Mode ────
+function checkStandalone() {
+    const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    if (!isStandalone && /iPhone|iPad/.test(navigator.userAgent)) {
+        if (!localStorage.getItem('a2hs_dismissed')) {
+            document.getElementById('a2hs-banner').classList.remove('hidden');
+        }
+    }
+}
 
-    // Back button support
-    window.addEventListener('popstate', (e) => {
-        if (e.state && e.state.page) navigate(e.state.page);
+function dismissA2HS() {
+    document.getElementById('a2hs-banner').classList.add('hidden');
+    localStorage.setItem('a2hs_dismissed', '1');
+}
+
+// ──── Dark Mode ────
+// ponytail: follow system preference only, manual toggle add when requested
+function initDarkMode() {
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+    }
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        document.documentElement.classList.toggle('dark', e.matches);
+        document.documentElement.classList.toggle('light', !e.matches);
     });
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// ──── Init ────
+document.addEventListener('DOMContentLoaded', () => {
+    initDarkMode();
+    const page = pathToPage();
+    navigate(page);
+    populateMonths();
+    loadSourceOptions();
+    setupCashbackCalc();
+    setupPullToRefresh();
+    checkStandalone();
+
+    document.getElementById('filter-month').addEventListener('change', (e) => {
+        monthFilter = e.target.value;
+        loadTransactions();
+    });
+    document.getElementById('filter-source').addEventListener('change', (e) => {
+        sourceFilter = e.target.value;
+        loadTransactions();
+    });
+
+    setStatusFilter('');
+});

@@ -1,74 +1,133 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Cashback Tracker</title>
+    <!-- PWA / iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cashback">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/icon-180.svg">
+    <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
-                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                    fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'system-ui', 'sans-serif'] },
                     colors: {
+                        ios: { bg: '#F2F2F7', card: '#FFFFFF', sep: '#C6C6C8', blue: '#007AFF', green: '#34C759', orange: '#FF9500', red: '#FF3B30', gray: '#8E8E93', gray2: '#636366', gray3: '#48484A', gray4: '#3A3A3C', gray5: '#2C2C2E', gray6: '#1C1C1E' },
                         primary: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
-                        emerald: { 50: '#ecfdf5', 100: '#d1fae5', 500: '#10b981', 600: '#059669', 700: '#047857' },
-                        amber: { 50: '#fffbeb', 100: '#fef3c7', 500: '#f59e0b', 600: '#d97706', 700: '#b45309' },
-                        rose: { 50: '#fff1f2', 100: '#ffe4e6', 500: '#f43f5e', 600: '#e11d48', 700: '#be123c' },
                     }
                 }
             }
         }
     </script>
     <style>
-        * { -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Inter', system-ui, sans-serif; background: #f8fafc; overscroll-behavior: none; }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        html, body { overscroll-behavior: none; -webkit-overflow-scrolling: touch; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; background: #F2F2F7; margin: 0; }
         .page { display: none; }
         .page.active { display: block; }
-        .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
-        .modal-overlay { background: rgba(0,0,0,0.5); }
-        input, select, textarea { font-size: 16px !important; } /* Prevent iOS zoom */
+        input, select, textarea { font-size: 16px !important; font-family: inherit; }
+        /* iOS spring curve */
+        .ios-spring { transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+        /* Active press */
+        .press:active { transform: scale(0.97); opacity: 0.7; }
+        /* Sheet */
+        .sheet-backdrop { background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+        .sheet-panel { transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1); }
+        .sheet-panel.open { transform: translateY(0); }
+        /* Hairline */
+        .hairline { height: 0.5px; background: #C6C6C8; }
+        .dark .hairline { background: #38383A; }
+        /* Skeleton shimmer */
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        .skeleton { background: linear-gradient(90deg, #E5E5EA 25%, #D1D1D6 50%, #E5E5EA 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
+        /* Swipe row */
+        .swipe-row { position: relative; overflow: hidden; }
+        .swipe-content { position: relative; z-index: 1; background: white; transition: transform 0.2s ease-out; }
+        .swipe-actions { position: absolute; top: 0; bottom: 0; display: flex; align-items: stretch; }
+        .swipe-actions-left { left: 0; }
+        .swipe-actions-right { right: 0; }
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            html:not(.light-forced) body { background: #000; }
+            html:not(.light-forced) .dark-auto { color-scheme: dark; }
+        }
+        .dark body { background: #000; }
+        .dark .ios-card { background: #1C1C1E !important; }
+        .dark .hairline { background: #38383A; }
+        .dark .ios-grouped-bg { background: #000 !important; }
+        /* Pull to refresh */
+        .ptr-spinner { height: 0; overflow: hidden; display: flex; justify-content: center; transition: height 0.3s; }
+        .ptr-spinner.active { height: 48px; }
     </style>
 </head>
-<body class="bg-slate-50 max-w-lg mx-auto relative min-h-screen pb-20">
+<body class="max-w-lg mx-auto relative min-h-screen dark-auto">
 
     <!-- ===== HOME PAGE ===== -->
     <div id="page-home" class="page active">
-        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10">
-            <h1 class="text-xl font-semibold text-slate-800">Cashback Tracker</h1>
+        <header id="header-home" class="sticky top-0 z-10" style="padding-top: env(safe-area-inset-top, 0px);">
+            <div class="bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-ios-sep/30 dark:border-white/10 px-4 py-2">
+                <h1 id="home-title" class="text-[34px] font-bold text-gray-900 dark:text-white leading-tight">Cashback</h1>
+            </div>
         </header>
-        <main class="px-4 py-4 space-y-4">
-            <!-- Summary Cards -->
-            <div class="grid grid-cols-2 gap-3">
-                <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending</p>
-                    <p id="stat-pending" class="text-2xl font-bold text-amber-600 mt-1">₹0</p>
-                </div>
-                <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Sources</p>
-                    <p id="stat-sources" class="text-2xl font-bold text-primary-600 mt-1">0</p>
+        <main class="px-4 py-4 space-y-4 pb-28">
+            <!-- Hero Card -->
+            <div class="bg-gradient-to-br from-primary-600 to-indigo-700 rounded-2xl p-5 text-white">
+                <p class="text-sm font-medium text-white/70">Pending Cashback</p>
+                <p id="stat-pending" class="text-[34px] font-bold mt-1 tracking-tight">₹0</p>
+                <div id="stat-trend" class="mt-2 hidden">
+                    <span class="text-xs font-medium bg-white/20 rounded-full px-2 py-0.5"></span>
                 </div>
             </div>
-            <!-- Quick Stats -->
-            <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Earned This Month</p>
-                        <p id="stat-earned" class="text-lg font-semibold text-emerald-600 mt-0.5">₹0</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Best Source</p>
-                        <p id="stat-best" class="text-sm font-medium text-slate-700 mt-0.5">—</p>
-                    </div>
+            <!-- Stat Pills -->
+            <div class="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl px-4 py-3 flex-shrink-0 min-w-[120px]">
+                    <p class="text-[13px] text-ios-gray dark:text-ios-gray">Earned</p>
+                    <p id="stat-earned" class="text-[17px] font-semibold text-ios-green mt-0.5">₹0</p>
                 </div>
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl px-4 py-3 flex-shrink-0 min-w-[100px]">
+                    <p class="text-[13px] text-ios-gray dark:text-ios-gray">Sources</p>
+                    <p id="stat-sources" class="text-[17px] font-semibold text-primary-600 dark:text-primary-500 mt-0.5">0</p>
+                </div>
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl px-4 py-3 flex-shrink-0 min-w-[120px]">
+                    <p class="text-[13px] text-ios-gray dark:text-ios-gray">Best</p>
+                    <p id="stat-best" class="text-[17px] font-semibold text-gray-900 dark:text-white mt-0.5 truncate">—</p>
+                </div>
+            </div>
+            <!-- Quick Actions -->
+            <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button onclick="openSheet('sheet-transaction')" class="press flex items-center gap-1.5 bg-primary-600 text-white rounded-full px-4 py-2 text-[15px] font-medium flex-shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+                    Add Transaction
+                </button>
+                <button onclick="navigate('offers')" class="press flex items-center gap-1.5 bg-white dark:bg-ios-gray6 text-gray-800 dark:text-white rounded-full px-4 py-2 text-[15px] font-medium flex-shrink-0 border border-gray-200 dark:border-ios-gray4">
+                    View Offers
+                </button>
+                <button onclick="openSheet('sheet-source')" class="press flex items-center gap-1.5 bg-white dark:bg-ios-gray6 text-gray-800 dark:text-white rounded-full px-4 py-2 text-[15px] font-medium flex-shrink-0 border border-gray-200 dark:border-ios-gray4">
+                    Add Card
+                </button>
             </div>
             <!-- Recent Transactions -->
             <div>
-                <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-2">Recent Transactions</h2>
-                <div id="recent-transactions" class="space-y-2">
-                    <p class="text-sm text-slate-400 py-8 text-center">No transactions yet</p>
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-[13px] font-semibold text-ios-gray uppercase tracking-wider">Recent Transactions</h2>
+                    <button onclick="navigate('transactions')" class="text-[15px] text-ios-blue font-medium press">See All</button>
+                </div>
+                <div id="recent-transactions" class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <div class="empty-state py-12 text-center">
+                        <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-ios-gray3 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                        <p class="text-[17px] font-semibold text-gray-500 dark:text-ios-gray">No transactions yet</p>
+                        <p class="text-[15px] text-ios-gray mt-1">Tap + to add your first one</p>
+                    </div>
                 </div>
             </div>
         </main>
@@ -76,259 +135,355 @@
 
     <!-- ===== TRANSACTIONS PAGE ===== -->
     <div id="page-transactions" class="page">
-        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10">
-            <h1 class="text-xl font-semibold text-slate-800">Transactions</h1>
-            <!-- Filters -->
-            <div class="flex gap-2 mt-2 overflow-x-auto pb-1">
-                <select id="filter-month" class="text-xs bg-slate-100 rounded-lg px-3 py-1.5 border-0 font-medium text-slate-600">
-                    <option value="">All Months</option>
-                </select>
-                <select id="filter-status" class="text-xs bg-slate-100 rounded-lg px-3 py-1.5 border-0 font-medium text-slate-600">
-                    <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="received">Received</option>
-                    <option value="disputed">Disputed</option>
-                </select>
-                <select id="filter-source" class="text-xs bg-slate-100 rounded-lg px-3 py-1.5 border-0 font-medium text-slate-600">
-                    <option value="">All Sources</option>
-                </select>
+        <header class="sticky top-0 z-10" style="padding-top: env(safe-area-inset-top, 0px);">
+            <div class="bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-ios-sep/30 dark:border-white/10 px-4 py-2">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-[22px] font-bold text-gray-900 dark:text-white">Transactions</h1>
+                    <button onclick="openSheet('sheet-transaction')" class="text-ios-blue text-[17px] font-medium press">+</button>
+                </div>
+                <!-- Segmented Control for Status -->
+                <div class="flex bg-gray-100 dark:bg-ios-gray5 rounded-lg p-0.5 mt-2">
+                    <button onclick="setStatusFilter('')" class="status-seg flex-1 py-1.5 text-[13px] font-medium rounded-md text-center" data-val="">All</button>
+                    <button onclick="setStatusFilter('pending')" class="status-seg flex-1 py-1.5 text-[13px] font-medium rounded-md text-center" data-val="pending">Pending</button>
+                    <button onclick="setStatusFilter('received')" class="status-seg flex-1 py-1.5 text-[13px] font-medium rounded-md text-center" data-val="received">Received</button>
+                </div>
+                <!-- Filters -->
+                <div class="flex gap-2 mt-2 overflow-x-auto pb-1 no-scrollbar">
+                    <select id="filter-month" class="text-[13px] bg-gray-100 dark:bg-ios-gray5 rounded-lg px-3 py-1.5 border-0 font-medium text-gray-600 dark:text-ios-gray">
+                        <option value="">All Months</option>
+                    </select>
+                    <select id="filter-source" class="text-[13px] bg-gray-100 dark:bg-ios-gray5 rounded-lg px-3 py-1.5 border-0 font-medium text-gray-600 dark:text-ios-gray">
+                        <option value="">All Sources</option>
+                    </select>
+                </div>
             </div>
         </header>
-        <main class="px-4 py-3">
-            <div id="transaction-list" class="space-y-2">
-                <p class="text-sm text-slate-400 py-8 text-center">No transactions</p>
+        <main class="px-4 py-3 pb-28">
+            <!-- Pull to refresh target -->
+            <div id="ptr-spinner" class="ptr-spinner">
+                <svg class="w-6 h-6 text-ios-gray animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+            </div>
+            <div id="transaction-list" class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                <div class="empty-state py-12 text-center">
+                    <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-ios-gray3 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <p class="text-[17px] font-semibold text-gray-500 dark:text-ios-gray">No transactions</p>
+                </div>
             </div>
             <div id="load-more-txn" class="py-4 text-center hidden">
-                <button onclick="loadMoreTransactions()" class="text-sm text-primary-600 font-medium">Load More</button>
+                <button onclick="loadMoreTransactions()" class="text-[15px] text-ios-blue font-medium press">Load More</button>
             </div>
         </main>
     </div>
 
     <!-- ===== CARDS PAGE ===== -->
     <div id="page-cards" class="page">
-        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10 flex justify-between items-center">
-            <h1 class="text-xl font-semibold text-slate-800">Cards & UPI</h1>
-            <button onclick="openSourceModal()" class="text-sm bg-primary-600 text-white px-3 py-1.5 rounded-lg font-medium">+ Add</button>
+        <header class="sticky top-0 z-10" style="padding-top: env(safe-area-inset-top, 0px);">
+            <div class="bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-ios-sep/30 dark:border-white/10 px-4 py-2 flex justify-between items-center">
+                <h1 class="text-[22px] font-bold text-gray-900 dark:text-white">Cards & UPI</h1>
+                <button onclick="openSheet('sheet-source')" class="text-ios-blue text-[17px] font-medium press">+ Add</button>
+            </div>
         </header>
-        <main class="px-4 py-3">
-            <div id="source-list" class="space-y-3">
-                <p class="text-sm text-slate-400 py-8 text-center">No payment sources</p>
+        <main class="px-4 py-3 pb-28 space-y-3">
+            <div id="source-list">
+                <div class="empty-state py-12 text-center bg-white dark:bg-ios-gray6 rounded-xl">
+                    <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-ios-gray3 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    <p class="text-[17px] font-semibold text-gray-500 dark:text-ios-gray">No payment sources</p>
+                    <p class="text-[15px] text-ios-gray mt-1">Add your cards and UPI apps</p>
+                </div>
             </div>
         </main>
     </div>
 
     <!-- ===== OFFERS PAGE ===== -->
     <div id="page-offers" class="page">
-        <header class="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-slate-100 px-4 py-3 z-10 flex justify-between items-center">
-            <h1 class="text-xl font-semibold text-slate-800">Offers</h1>
-            <button onclick="openOfferModal()" class="text-sm bg-primary-600 text-white px-3 py-1.5 rounded-lg font-medium">+ Add</button>
+        <header class="sticky top-0 z-10" style="padding-top: env(safe-area-inset-top, 0px);">
+            <div class="bg-white/80 dark:bg-black/80 backdrop-blur-xl border-b border-ios-sep/30 dark:border-white/10 px-4 py-2 flex justify-between items-center">
+                <h1 class="text-[22px] font-bold text-gray-900 dark:text-white">Offers</h1>
+                <button onclick="openSheet('sheet-offer')" class="text-ios-blue text-[17px] font-medium press">+ Add</button>
+            </div>
         </header>
-        <main class="px-4 py-3">
+        <main class="px-4 py-3 pb-28">
             <div id="expiring-section" class="mb-4 hidden">
-                <h2 class="text-sm font-semibold text-rose-600 uppercase tracking-wider mb-2">⚠ Expiring Soon</h2>
-                <div id="expiring-offers" class="space-y-2"></div>
+                <h2 class="text-[13px] font-semibold text-ios-red uppercase tracking-wider mb-2">Expiring Soon</h2>
+                <div id="expiring-offers" class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden"></div>
             </div>
             <div>
-                <h2 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-2">Active Offers</h2>
-                <div id="offer-list" class="space-y-2">
-                    <p class="text-sm text-slate-400 py-8 text-center">No active offers</p>
+                <h2 class="text-[13px] font-semibold text-ios-gray uppercase tracking-wider mb-2">Active Offers</h2>
+                <div id="offer-list" class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <div class="empty-state py-12 text-center">
+                        <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-ios-gray3 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
+                        <p class="text-[17px] font-semibold text-gray-500 dark:text-ios-gray">No active offers</p>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
     <!-- ===== FAB ===== -->
-    <button id="fab" onclick="openTransactionModal()"
-        class="fixed bottom-24 right-4 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl z-20 hover:bg-primary-700 active:scale-95 transition-transform"
-        style="box-shadow: 0 8px 24px rgba(0,0,0,0.15);">
-        +
+    <button id="fab" onclick="openSheet('sheet-transaction')"
+        class="fixed right-5 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl z-20 press"
+        style="bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
     </button>
 
-    <!-- ===== BOTTOM NAV ===== -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 bottom-nav z-30 max-w-lg mx-auto">
-        <div class="flex justify-around py-2">
-            <button onclick="navigate('home')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="home">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
-                <span class="text-[10px] font-medium">Home</span>
-            </button>
-            <button onclick="navigate('transactions')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="transactions">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                <span class="text-[10px] font-medium">Transactions</span>
-            </button>
-            <button onclick="navigate('cards')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="cards">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-                <span class="text-[10px] font-medium">Cards</span>
-            </button>
-            <button onclick="navigate('offers')" class="nav-tab flex flex-col items-center gap-0.5 px-4 py-1 min-w-[64px]" data-page="offers">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
-                <span class="text-[10px] font-medium">Offers</span>
-            </button>
+    <!-- ===== BOTTOM TAB BAR ===== -->
+    <nav class="fixed bottom-0 left-0 right-0 z-30 max-w-lg mx-auto">
+        <div class="bg-white/70 dark:bg-black/70 backdrop-blur-xl border-t border-ios-sep/30 dark:border-white/10" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+            <div class="flex justify-around pt-1.5 pb-1">
+                <button onclick="navigate('home')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="home">
+                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24"><path class="nav-fill" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+                    <span class="text-[10px] font-medium">Home</span>
+                </button>
+                <button onclick="navigate('transactions')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="transactions">
+                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24"><path class="nav-fill" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <span class="text-[10px] font-medium">Transactions</span>
+                </button>
+                <button onclick="navigate('cards')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="cards">
+                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24"><path class="nav-fill" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    <span class="text-[10px] font-medium">Cards</span>
+                </button>
+                <button onclick="navigate('offers')" class="nav-tab flex flex-col items-center gap-0.5 min-w-[64px] py-1" data-page="offers">
+                    <svg class="w-6 h-6 nav-icon" viewBox="0 0 24 24"><path class="nav-fill" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
+                    <span class="text-[10px] font-medium">Offers</span>
+                </button>
+            </div>
         </div>
     </nav>
 
-    <!-- ===== TRANSACTION MODAL ===== -->
-    <div id="modal-transaction" class="fixed inset-0 z-50 hidden">
-        <div class="modal-overlay absolute inset-0" onclick="closeModal('modal-transaction')"></div>
-        <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto max-w-lg mx-auto">
-            <div class="sticky top-0 bg-white px-4 py-3 border-b border-slate-100 flex justify-between items-center rounded-t-2xl">
-                <h2 class="text-lg font-semibold">Add Transaction</h2>
-                <button onclick="closeModal('modal-transaction')" class="text-slate-400 text-xl">&times;</button>
+    <!-- ===== TRANSACTION SHEET ===== -->
+    <div id="sheet-transaction" class="fixed inset-0 z-50 hidden">
+        <div class="sheet-backdrop absolute inset-0" onclick="closeSheet('sheet-transaction')"></div>
+        <div class="sheet-panel absolute bottom-0 left-0 right-0 max-w-lg mx-auto rounded-t-2xl max-h-[90vh] overflow-y-auto" style="background: #F2F2F7; padding-bottom: env(safe-area-inset-bottom, 0px);">
+            <!-- Drag Handle -->
+            <div class="flex justify-center pt-2 pb-1 sheet-handle cursor-grab">
+                <div class="w-10 h-1 bg-gray-300 dark:bg-ios-gray3 rounded-full"></div>
             </div>
-            <form id="form-transaction" class="p-4 space-y-4" onsubmit="saveTransaction(event)">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Payment Source</label>
-                    <select id="txn-source" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
-                        <option value="">Select source...</option>
-                    </select>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label>
-                        <input type="number" id="txn-amount" required step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="0.00">
+            <!-- Header -->
+            <div class="flex justify-between items-center px-4 pb-2">
+                <button onclick="closeSheet('sheet-transaction')" class="text-ios-blue text-[17px] font-medium press">Cancel</button>
+                <h2 class="text-[17px] font-semibold text-gray-900 dark:text-white">New Transaction</h2>
+                <button type="button" onclick="submitForm('form-transaction')" class="text-ios-blue text-[17px] font-semibold press">Save</button>
+            </div>
+            <form id="form-transaction" class="px-4 pb-4 space-y-4" onsubmit="saveTransaction(event)">
+                <!-- Grouped Section: Details -->
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Source</span>
+                        <select id="txn-source" required class="text-[17px] text-ios-blue text-right bg-transparent border-0 pr-0 max-w-[60%]">
+                            <option value="">Select...</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
-                        <input type="date" id="txn-date" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Amount</span>
+                        <div class="flex items-center">
+                            <span class="text-[17px] text-ios-gray mr-1">₹</span>
+                            <input type="number" id="txn-amount" required step="0.01" min="0" inputmode="decimal" class="text-[17px] text-right bg-transparent border-0 w-28 p-0" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Merchant</span>
+                        <input type="text" id="txn-merchant" required autocomplete="off" autocapitalize="words" class="text-[17px] text-right bg-transparent border-0 w-[55%] p-0 text-gray-900 dark:text-white" placeholder="Enter name">
+                    </div>
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Category</span>
+                        <input type="text" id="txn-category" autocomplete="off" autocapitalize="words" class="text-[17px] text-right bg-transparent border-0 w-[55%] p-0 text-gray-900 dark:text-white" placeholder="Optional">
+                    </div>
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Date</span>
+                        <input type="date" id="txn-date" required class="text-[17px] text-ios-blue bg-transparent border-0 p-0">
                     </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Merchant</label>
-                    <input type="text" id="txn-merchant" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Amazon, Swiggy">
+                <!-- Cashback Section -->
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <div id="cashback-preview" class="px-4 py-3 bg-ios-green/10 hidden">
+                        <p class="text-[15px] font-medium text-ios-green">
+                            Expected: <span id="preview-amount" class="font-semibold">₹0</span>
+                        </p>
+                        <p id="preview-offer" class="text-[13px] text-ios-green/80 mt-0.5"></p>
+                    </div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Cashback</span>
+                        <div class="flex items-center">
+                            <span class="text-[17px] text-ios-gray mr-1">₹</span>
+                            <input type="number" id="txn-cashback" step="0.01" min="0" value="0" inputmode="decimal" class="text-[17px] text-right bg-transparent border-0 w-24 p-0" placeholder="0.00">
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                    <input type="text" id="txn-category" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Groceries, Fuel, Dining">
-                </div>
-                <!-- Cashback Preview -->
-                <div id="cashback-preview" class="bg-emerald-50 rounded-lg p-3 hidden">
-                    <p class="text-sm text-emerald-700">
-                        Expected Cashback: <span id="preview-amount" class="font-semibold">₹0</span>
-                        <span id="preview-offer" class="text-xs text-emerald-600 block mt-0.5"></span>
-                    </p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Expected Cashback (₹) <span class="text-slate-400 font-normal">— override if needed</span></label>
-                    <input type="number" id="txn-cashback" step="0.01" min="0" value="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Notes</label>
-                    <textarea id="txn-notes" rows="2" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="Optional notes"></textarea>
+                <!-- Notes -->
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <textarea id="txn-notes" rows="3" class="w-full px-4 py-3 text-[17px] bg-transparent border-0 resize-none text-gray-900 dark:text-white" placeholder="Notes (optional)"></textarea>
                 </div>
                 <input type="hidden" id="txn-offer-id" value="">
                 <input type="hidden" id="txn-edit-id" value="">
-                <button type="submit" class="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 active:scale-[0.98] transition-transform">
+                <!-- Status (shown only when editing) -->
+                <div id="txn-status-group" class="hidden">
+                    <p class="text-[13px] font-semibold text-ios-gray uppercase tracking-wider mb-2 px-1">Status</p>
+                    <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                        <div class="flex p-1">
+                            <button type="button" onclick="setTxnStatus('pending')" class="txn-status-btn flex-1 py-2 rounded-lg text-[13px] font-medium">Pending</button>
+                            <button type="button" onclick="setTxnStatus('received')" class="txn-status-btn flex-1 py-2 rounded-lg text-[13px] font-medium">Received</button>
+                            <button type="button" onclick="setTxnStatus('disputed')" class="txn-status-btn flex-1 py-2 rounded-lg text-[13px] font-medium">Disputed</button>
+                        </div>
+                        <input type="hidden" id="txn-status" value="">
+                        <div id="actual-cashback-group" class="hidden">
+                            <div class="hairline ml-4"></div>
+                            <div class="flex items-center justify-between px-4 py-3">
+                                <span class="text-[17px] text-gray-900 dark:text-white">Actual</span>
+                                <div class="flex items-center">
+                                    <span class="text-[17px] text-ios-gray mr-1">₹</span>
+                                    <input type="number" id="txn-actual" step="0.01" min="0" inputmode="decimal" class="text-[17px] text-right bg-transparent border-0 w-24 p-0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-primary-600 text-white py-3.5 rounded-xl text-[17px] font-semibold press" style="min-height:50px;">
                     Save Transaction
                 </button>
             </form>
         </div>
     </div>
 
-    <!-- ===== SOURCE MODAL ===== -->
-    <div id="modal-source" class="fixed inset-0 z-50 hidden">
-        <div class="modal-overlay absolute inset-0" onclick="closeModal('modal-source')"></div>
-        <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto max-w-lg mx-auto">
-            <div class="sticky top-0 bg-white px-4 py-3 border-b border-slate-100 flex justify-between items-center rounded-t-2xl">
-                <h2 class="text-lg font-semibold">Add Payment Source</h2>
-                <button onclick="closeModal('modal-source')" class="text-slate-400 text-xl">&times;</button>
+    <!-- ===== SOURCE SHEET ===== -->
+    <div id="sheet-source" class="fixed inset-0 z-50 hidden">
+        <div class="sheet-backdrop absolute inset-0" onclick="closeSheet('sheet-source')"></div>
+        <div class="sheet-panel absolute bottom-0 left-0 right-0 max-w-lg mx-auto rounded-t-2xl max-h-[90vh] overflow-y-auto" style="background: #F2F2F7; padding-bottom: env(safe-area-inset-bottom, 0px);">
+            <div class="flex justify-center pt-2 pb-1 sheet-handle cursor-grab">
+                <div class="w-10 h-1 bg-gray-300 dark:bg-ios-gray3 rounded-full"></div>
             </div>
-            <form id="form-source" class="p-4 space-y-4" onsubmit="saveSource(event)">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                    <input type="text" id="src-name" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. HDFC Millennia">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
-                        <select id="src-type" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+            <div class="flex justify-between items-center px-4 pb-2">
+                <button onclick="closeSheet('sheet-source')" class="text-ios-blue text-[17px] font-medium press">Cancel</button>
+                <h2 class="text-[17px] font-semibold text-gray-900 dark:text-white">Add Source</h2>
+                <button type="button" onclick="submitForm('form-source')" class="text-ios-blue text-[17px] font-semibold press">Save</button>
+            </div>
+            <form id="form-source" class="px-4 pb-4 space-y-4" onsubmit="saveSource(event)">
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Name</span>
+                        <input type="text" id="src-name" required autocapitalize="words" class="text-[17px] text-right bg-transparent border-0 w-[60%] p-0 text-gray-900 dark:text-white" placeholder="HDFC Millennia">
+                    </div>
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Type</span>
+                        <select id="src-type" required class="text-[17px] text-ios-blue text-right bg-transparent border-0 pr-0">
                             <option value="credit">Credit Card</option>
                             <option value="debit">Debit Card</option>
                             <option value="upi">UPI App</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Provider</label>
-                        <input type="text" id="src-provider" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. HDFC">
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Provider</span>
+                        <input type="text" id="src-provider" required autocapitalize="words" class="text-[17px] text-right bg-transparent border-0 w-[50%] p-0 text-gray-900 dark:text-white" placeholder="HDFC">
                     </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Network</label>
-                        <select id="src-network" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Network</span>
+                        <select id="src-network" class="text-[17px] text-ios-blue text-right bg-transparent border-0 pr-0">
                             <option value="">None</option>
                             <option value="Visa">Visa</option>
                             <option value="Mastercard">Mastercard</option>
                             <option value="Rupay">Rupay</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Color</label>
-                        <input type="color" id="src-color" value="#6366f1" class="w-full h-10 rounded-lg border border-slate-200 cursor-pointer">
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Color</span>
+                        <input type="color" id="src-color" value="#6366f1" class="w-8 h-8 rounded-full border-0 cursor-pointer p-0">
                     </div>
                 </div>
                 <input type="hidden" id="src-edit-id" value="">
-                <button type="submit" class="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700">Save Source</button>
+                <button type="submit" class="w-full bg-primary-600 text-white py-3.5 rounded-xl text-[17px] font-semibold press" style="min-height:50px;">Save Source</button>
             </form>
         </div>
     </div>
 
-    <!-- ===== OFFER MODAL ===== -->
-    <div id="modal-offer" class="fixed inset-0 z-50 hidden">
-        <div class="modal-overlay absolute inset-0" onclick="closeModal('modal-offer')"></div>
-        <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[85vh] overflow-y-auto max-w-lg mx-auto">
-            <div class="sticky top-0 bg-white px-4 py-3 border-b border-slate-100 flex justify-between items-center rounded-t-2xl">
-                <h2 class="text-lg font-semibold">Add Offer</h2>
-                <button onclick="closeModal('modal-offer')" class="text-slate-400 text-xl">&times;</button>
+    <!-- ===== OFFER SHEET ===== -->
+    <div id="sheet-offer" class="fixed inset-0 z-50 hidden">
+        <div class="sheet-backdrop absolute inset-0" onclick="closeSheet('sheet-offer')"></div>
+        <div class="sheet-panel absolute bottom-0 left-0 right-0 max-w-lg mx-auto rounded-t-2xl max-h-[90vh] overflow-y-auto" style="background: #F2F2F7; padding-bottom: env(safe-area-inset-bottom, 0px);">
+            <div class="flex justify-center pt-2 pb-1 sheet-handle cursor-grab">
+                <div class="w-10 h-1 bg-gray-300 dark:bg-ios-gray3 rounded-full"></div>
             </div>
-            <form id="form-offer" class="p-4 space-y-4" onsubmit="saveOffer(event)">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Payment Source</label>
-                    <select id="ofr-source" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
-                        <option value="">Select source...</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                    <input type="text" id="ofr-category" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. Groceries, Fuel, Amazon">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
-                        <select id="ofr-type" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+            <div class="flex justify-between items-center px-4 pb-2">
+                <button onclick="closeSheet('sheet-offer')" class="text-ios-blue text-[17px] font-medium press">Cancel</button>
+                <h2 class="text-[17px] font-semibold text-gray-900 dark:text-white">Add Offer</h2>
+                <button type="button" onclick="submitForm('form-offer')" class="text-ios-blue text-[17px] font-semibold press">Save</button>
+            </div>
+            <form id="form-offer" class="px-4 pb-4 space-y-4" onsubmit="saveOffer(event)">
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Source</span>
+                        <select id="ofr-source" required class="text-[17px] text-ios-blue text-right bg-transparent border-0 pr-0 max-w-[60%]">
+                            <option value="">Select...</option>
+                        </select>
+                    </div>
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Category</span>
+                        <input type="text" id="ofr-category" required autocapitalize="words" class="text-[17px] text-right bg-transparent border-0 w-[55%] p-0 text-gray-900 dark:text-white" placeholder="Groceries">
+                    </div>
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Type</span>
+                        <select id="ofr-type" required class="text-[17px] text-ios-blue text-right bg-transparent border-0 pr-0">
                             <option value="percentage">Percentage (%)</option>
                             <option value="flat">Flat (₹)</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Value</label>
-                        <input type="number" id="ofr-value" required step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 5">
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Value</span>
+                        <input type="number" id="ofr-value" required step="0.01" min="0" inputmode="decimal" class="text-[17px] text-right bg-transparent border-0 w-24 p-0" placeholder="5">
+                    </div>
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Max Cap</span>
+                        <div class="flex items-center">
+                            <span class="text-[17px] text-ios-gray mr-1">₹</span>
+                            <input type="number" id="ofr-cap" step="0.01" min="0" inputmode="decimal" class="text-[17px] text-right bg-transparent border-0 w-24 p-0" placeholder="Optional">
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Max Cap (₹) <span class="text-slate-400 font-normal">— optional</span></label>
-                    <input type="number" id="ofr-cap" step="0.01" min="0" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="e.g. 200">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Valid From</label>
-                        <input type="date" id="ofr-from" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Valid From</span>
+                        <input type="date" id="ofr-from" required class="text-[17px] text-ios-blue bg-transparent border-0 p-0">
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Valid Until</label>
-                        <input type="date" id="ofr-until" required class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                    <div class="hairline ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3">
+                        <span class="text-[17px] text-gray-900 dark:text-white">Valid Until</span>
+                        <input type="date" id="ofr-until" required class="text-[17px] text-ios-blue bg-transparent border-0 p-0">
                     </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Terms</label>
-                    <textarea id="ofr-terms" rows="2" class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" placeholder="Optional terms & conditions"></textarea>
+                <div class="bg-white dark:bg-ios-gray6 rounded-xl overflow-hidden">
+                    <textarea id="ofr-terms" rows="3" class="w-full px-4 py-3 text-[17px] bg-transparent border-0 resize-none text-gray-900 dark:text-white" placeholder="Terms & conditions (optional)"></textarea>
                 </div>
                 <input type="hidden" id="ofr-edit-id" value="">
-                <button type="submit" class="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700">Save Offer</button>
+                <button type="submit" class="w-full bg-primary-600 text-white py-3.5 rounded-xl text-[17px] font-semibold press" style="min-height:50px;">Save Offer</button>
             </form>
         </div>
     </div>
 
     <!-- ===== TOAST ===== -->
-    <div id="toast" class="fixed top-4 left-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-xl text-sm font-medium shadow-lg z-50 hidden max-w-lg mx-auto transition-all transform -translate-y-2 opacity-0">
+    <div id="toast" class="fixed left-4 right-4 bg-gray-800 dark:bg-ios-gray5 text-white px-4 py-3 rounded-xl text-[15px] font-medium shadow-lg z-[60] hidden max-w-lg mx-auto transition-all transform -translate-y-2 opacity-0" style="top: calc(env(safe-area-inset-top, 0px) + 8px);">
+    </div>
+
+    <!-- ===== ADD TO HOME SCREEN BANNER ===== -->
+    <div id="a2hs-banner" class="fixed bottom-0 left-0 right-0 z-40 max-w-lg mx-auto hidden" style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+        <div class="mx-4 mb-20 bg-white dark:bg-ios-gray6 rounded-xl p-4 shadow-lg border border-gray-200 dark:border-ios-gray4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-[15px] font-semibold text-gray-900 dark:text-white">Add to Home Screen</p>
+                    <p class="text-[13px] text-ios-gray mt-0.5">For the best experience, add this app to your Home Screen</p>
+                </div>
+                <button onclick="dismissA2HS()" class="text-ios-gray text-lg ml-3">&times;</button>
+            </div>
+        </div>
     </div>
 
     <script src="/static/js/app.js"></script>
