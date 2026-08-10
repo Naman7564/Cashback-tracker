@@ -6,6 +6,8 @@ let currentPage = 'home';
 let statusFilter = '', monthFilter = '', sourceFilter = '';
 let allSources = [];
 let calcTimer = null;
+let txnDateRange = 'month'; // today|week|month|all
+let expandedTxnId = null;
 let todoDate = new Date().toISOString().split('T')[0];
 let todoSourceData = null; // currently open source in record modal
 let todoData = null; // cached todo list response
@@ -21,6 +23,7 @@ async function api(path, opts = {}) {
         try { const data = await res.json(); msg = data.error || data.detail || JSON.stringify(data); } catch {}
         throw new Error(msg);
     }
+    if (res.status === 204) return null;
     return res.json();
 }
 
@@ -36,6 +39,7 @@ function navigate(page) {
     else if (page === 'todo') loadTodo();
     else if (page === 'cards') loadSources();
     else if (page === 'offers') loadOffers();
+    else if (page === 'transactions') loadTransactions();
     window.scrollTo(0, 0);
 }
 
@@ -56,7 +60,7 @@ window.addEventListener('popstate', (e) => {
 
 function pathToPage() {
     const p = location.pathname.replace(/\//g, '');
-    return ['todo', 'cards', 'offers'].includes(p) ? p : 'home';
+    return ['todo', 'cards', 'offers', 'transactions'].includes(p) ? p : 'home';
 }
 
 // ──── Bottom Sheet System ────
@@ -377,7 +381,8 @@ async function recordTodoTransaction() {
         toast(`₹${fmt(cashback)} recorded from ${esc(todoSourceData.source.name)}`);
         if (navigator.vibrate) navigator.vibrate(10);
         loadTodo();
-        if (currentPage === 'home') loadDashboard();
+        // Always refresh dashboard so Home recent transactions stay current
+        loadDashboard();
     } catch (e) {
         haptic([50, 50, 50]);
         toast('Failed to record: ' + e.message, true);
@@ -484,7 +489,7 @@ async function quickStatus(id, status) {
         haptic(20);
         toast(`Marked as ${status}`);
         if (currentPage === 'home') loadDashboard();
-        else loadTransactions();
+        else if (currentPage === 'transactions') loadTransactions();
     } catch (e) {
         toast('Failed to update', true);
     }
@@ -684,7 +689,7 @@ async function saveTransaction(e) {
         closeSheet('sheet-transaction');
         toast(editId ? 'Transaction updated' : 'Transaction added');
         if (currentPage === 'home') loadDashboard();
-        else loadTransactions();
+        else if (currentPage === 'transactions') loadTransactions();
     } catch (e) {
         haptic([50, 50, 50]);
         toast('Failed to save', true);
@@ -826,6 +831,164 @@ async function editOffer(id) {
         openSheet('sheet-offer');
     } catch (e) {
         toast('Failed to load offer', true);
+    }
+}
+
+// ──── Transactions Page ────
+function getDateRange(range) {
+    const today = new Date();
+    const toStr = d => d.toISOString().split('T')[0];
+    switch (range) {
+        case 'today': return { date_from: toStr(today), date_to: toStr(today) };
+        case 'week': {
+            const start = new Date(today);
+            start.setDate(start.getDate() - start.getDay());
+            return { date_from: toStr(start), date_to: toStr(today) };
+        }
+        case 'month': {
+            const start = new Date(today.getFullYear(), today.getMonth(), 1);
+            return { date_from: toStr(start), date_to: toStr(today) };
+        }
+        default: return {};
+    }
+}
+
+function setTxnDateRange(range) {
+    txnDateRange = range;
+    document.querySelectorAll('.txn-date-pill').forEach(btn => {
+        const isActive = btn.textContent.trim().toLowerCase().replace(/\s+/g, '') ===
+            { today: 'today', week: 'thisweek', month: 'thismonth', all: 'alltime' }[range];
+        btn.classList.toggle('bg-indigo-500/80', isActive);
+        btn.classList.toggle('text-white', isActive);
+        btn.classList.toggle('bg-white/5', !isActive);
+        btn.classList.toggle('text-slate-400', !isActive);
+        btn.classList.toggle('border', !isActive);
+        btn.classList.toggle('border-white/5', !isActive);
+    });
+    haptic(10);
+    loadTransactions();
+}
+
+async function loadTransactions() {
+    loadSourceOptions();
+    const params = new URLSearchParams({ ordering: '-transaction_date' });
+    const dateRange = getDateRange(txnDateRange);
+    if (dateRange.date_from) params.set('date_from', dateRange.date_from);
+    if (dateRange.date_to) params.set('date_to', dateRange.date_to);
+    const sourceVal = document.getElementById('filter-source')?.value;
+    if (sourceVal) params.set('source', sourceVal);
+    const statusVal = document.getElementById('filter-status')?.value;
+    if (statusVal) params.set('status', statusVal);
+
+    const container = document.getElementById('transaction-list');
+    try {
+        const data = await api(`transactions/?${params}`);
+        const txns = data.results || data;
+        if (!txns.length) {
+            container.innerHTML = `<div class="glass rounded-3xl ring-1 ring-white/10">${emptyState('clipboard', 'No transactions found', 'Try changing your filters')}</div>`;
+            return;
+        }
+        container.innerHTML = txns.map((t, i) => txnExpandableRow(t, i)).join('');
+    } catch (e) {
+        console.error('Transactions load failed:', e);
+        container.innerHTML = `<div class="glass rounded-3xl ring-1 ring-white/10">${emptyState('clipboard', 'Failed to load', e.message)}</div>`;
+    }
+}
+
+function txnExpandableRow(t, idx) {
+    const statusStyles = {
+        pending: { bg: 'bg-amber-500/15', text: 'text-amber-300', border: 'border-amber-500/20' },
+        received: { bg: 'bg-emerald-500/15', text: 'text-emerald-300', border: 'border-emerald-500/20' },
+        disputed: { bg: 'bg-rose-500/15', text: 'text-rose-300', border: 'border-rose-500/20' },
+        na: { bg: 'bg-white/5', text: 'text-slate-400', border: 'border-white/10' }
+    };
+    const s = statusStyles[t.status] || statusStyles.na;
+    const date = new Date(t.transaction_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const color = t.source_color || '#6366f1';
+
+    const upiHtml = t.source_type === 'upi' && t.upi_numbers_detail?.length
+        ? `<div class="flex flex-wrap gap-1.5 mt-2">
+            <span class="text-[12px] text-slate-400">UPI IDs:</span>
+            ${t.upi_numbers_detail.map(u => `<span class="text-[12px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg px-2 py-0.5">${esc(u.upi_id)}</span>`).join('')}
+           </div>`
+        : '';
+
+    const cashbackLine = (t.expected_cashback > 0 || t.actual_cashback > 0)
+        ? `<div class="flex gap-4 text-[13px] mt-1">
+            ${t.expected_cashback > 0 ? `<span class="text-slate-400">Expected: <span class="text-white font-medium">₹${fmt(t.expected_cashback)}</span></span>` : ''}
+            ${t.actual_cashback > 0 ? `<span class="text-emerald-400">Received: <span class="font-medium">₹${fmt(t.actual_cashback)}</span></span>` : ''}
+           </div>`
+        : '';
+
+    const notesLine = t.notes ? `<p class="text-[13px] text-slate-400 mt-1">${esc(t.notes)}</p>` : '';
+
+    const actions = t.status === 'pending'
+        ? `<div class="flex gap-2 mt-3">
+            <button onclick="event.stopPropagation();quickStatus(${t.id},'received')" class="text-[12px] font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 press">Mark Received</button>
+            <button onclick="event.stopPropagation();deleteTxn(${t.id})" class="text-[12px] font-semibold px-3 py-1.5 rounded-xl bg-rose-500/15 text-rose-300 border border-rose-500/20 press">Delete</button>
+           </div>`
+        : `<div class="flex gap-2 mt-3">
+            <button onclick="event.stopPropagation();editTransaction(${t.id})" class="text-[12px] font-semibold px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 border border-white/10 press">Edit</button>
+            <button onclick="event.stopPropagation();deleteTxn(${t.id})" class="text-[12px] font-semibold px-3 py-1.5 rounded-xl bg-rose-500/15 text-rose-300 border border-rose-500/20 press">Delete</button>
+           </div>`;
+
+    return `
+        <div class="stagger glass rounded-2xl ring-1 ring-white/10 overflow-hidden" style="animation-delay:${Math.min(idx, 10) * 30}ms">
+            <div class="flex items-center px-4 py-3.5 press cursor-pointer" onclick="toggleTxnExpand(${t.id})">
+                <div class="w-2 h-2 rounded-full flex-shrink-0 mr-3" style="background:${color}"></div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-[15px] font-medium text-white truncate">${esc(t.merchant)}</p>
+                    <p class="text-[12px] text-slate-400 mt-0.5">${esc(t.source_name || '')} · ${date}</p>
+                </div>
+                <div class="text-right ml-3 flex-shrink-0">
+                    <p class="text-[15px] font-semibold text-white">₹${fmt(t.amount)}</p>
+                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.text} border ${s.border}">${t.status}</span>
+                </div>
+                <svg class="w-4 h-4 text-slate-600 ml-2 flex-shrink-0 transition-transform duration-200 txn-chevron-${t.id}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div id="txn-detail-${t.id}" class="hidden px-4 pb-4 pt-0 border-t border-white/5">
+                ${cashbackLine}
+                ${upiHtml}
+                ${notesLine}
+                ${actions}
+            </div>
+        </div>`;
+}
+
+function toggleTxnExpand(id) {
+    const detail = document.getElementById(`txn-detail-${id}`);
+    const chevron = document.querySelector(`.txn-chevron-${id}`);
+    if (!detail) return;
+    const isOpen = !detail.classList.contains('hidden');
+    // Close previous
+    if (expandedTxnId && expandedTxnId !== id) {
+        const prev = document.getElementById(`txn-detail-${expandedTxnId}`);
+        const prevChev = document.querySelector(`.txn-chevron-${expandedTxnId}`);
+        if (prev) prev.classList.add('hidden');
+        if (prevChev) prevChev.style.transform = '';
+    }
+    if (isOpen) {
+        detail.classList.add('hidden');
+        if (chevron) chevron.style.transform = '';
+        expandedTxnId = null;
+    } else {
+        detail.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        expandedTxnId = id;
+    }
+    haptic(10);
+}
+
+async function deleteTxn(id) {
+    if (!confirm('Delete this transaction?')) return;
+    try {
+        await api(`transactions/${id}/`, { method: 'DELETE' });
+        haptic(20);
+        toast('Transaction deleted');
+        loadTransactions();
+        if (currentPage === 'home') loadDashboard();
+    } catch (e) {
+        toast('Failed to delete', true);
     }
 }
 

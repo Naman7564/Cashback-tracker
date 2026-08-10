@@ -43,7 +43,7 @@ class OfferViewSet(viewsets.ModelViewSet):
 
 
 class TransactionViewSet(viewsets.ModelViewSet):
-    queryset = Transaction.objects.select_related('source', 'offer').all()
+    queryset = Transaction.objects.select_related('source', 'offer').prefetch_related('upi_numbers').all()
     serializer_class = TransactionSerializer
 
     def get_queryset(self):
@@ -51,12 +51,24 @@ class TransactionViewSet(viewsets.ModelViewSet):
         source = self.request.query_params.get('source')
         status_filter = self.request.query_params.get('status')
         month = self.request.query_params.get('statement_month')
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        ordering = self.request.query_params.get('ordering', '-transaction_date')
+        limit = self.request.query_params.get('limit')
         if source:
             qs = qs.filter(source_id=source)
         if status_filter:
             qs = qs.filter(status=status_filter)
         if month:
             qs = qs.filter(statement_month=month)
+        if date_from:
+            qs = qs.filter(transaction_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(transaction_date__lte=date_to)
+        if ordering:
+            qs = qs.order_by(ordering)
+        if limit:
+            qs = qs[:int(limit)]
         return qs
 
 
@@ -121,7 +133,7 @@ def dashboard_stats(request):
         total=Sum('actual_cashback')
     ).order_by('-total').first()
 
-    recent = Transaction.objects.select_related('source')[:5]
+    recent = Transaction.objects.select_related('source').prefetch_related('upi_numbers')[:5]
 
     return Response({
         'pending_cashback': float(pending),

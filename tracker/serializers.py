@@ -34,10 +34,12 @@ class OfferSerializer(serializers.ModelSerializer):
 class TransactionSerializer(serializers.ModelSerializer):
     source_name = serializers.ReadOnlyField(source='source.name')
     source_color = serializers.ReadOnlyField(source='source.color')
+    source_type = serializers.ReadOnlyField(source='source.source_type')
     upi_number_ids = serializers.PrimaryKeyRelatedField(
         source='upi_numbers', queryset=UPINumber.objects.all(),
         many=True, required=False
     )
+    upi_numbers_detail = UPINumberSerializer(source='upi_numbers', many=True, read_only=True)
 
     class Meta:
         model = Transaction

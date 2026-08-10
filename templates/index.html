@@ -79,6 +79,8 @@
         .stagger:nth-child(5) { animation-delay: 200ms; }
         .stagger:nth-child(6) { animation-delay: 250ms; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        .txn-date-pill { border: 1px solid transparent; }
+        .txn-date-pill.active, .txn-date-pill[class*="bg-indigo"] { border-color: rgba(99,102,241,0.3); }
         /* No scrollbar on horizontal scroll */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -157,7 +159,7 @@
             <div class="stagger">
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="text-[17px] font-semibold text-white">Recent Transactions</h2>
-                    <button onclick="navigate('todo')" class="text-[15px] text-indigo-400 font-medium press">See All ›</button>
+                    <button onclick="navigate('transactions')" class="text-[15px] text-indigo-400 font-medium press">See All ›</button>
                 </div>
                 <div class="h-px bg-gradient-to-r from-white/10 via-white/5 to-transparent mb-3"></div>
                 <div id="recent-transactions" class="glass rounded-3xl overflow-hidden ring-1 ring-white/10">
@@ -250,6 +252,48 @@
                         <svg class="w-12 h-12 mx-auto text-slate-600 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
                         <p class="text-[17px] font-semibold text-slate-400">No active offers</p>
                     </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== TRANSACTIONS PAGE ===== -->
+    <div id="page-transactions" class="page relative z-10">
+        <header class="sticky top-0 z-20" style="padding-top: env(safe-area-inset-top, 0px);">
+            <div class="bg-black/30 backdrop-blur-xl border-b border-white/5 px-5 py-3">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-[28px] font-bold text-white tracking-tight">Transactions</h1>
+                    <button onclick="navigate('home')" class="text-indigo-400 text-[15px] font-medium press">← Home</button>
+                </div>
+                <!-- Filter Bar -->
+                <div class="mt-3 space-y-2">
+                    <!-- Date Range Pills -->
+                    <div id="txn-date-pills" class="flex gap-2 overflow-x-auto no-scrollbar">
+                        <button onclick="setTxnDateRange('today')" class="txn-date-pill flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all press">Today</button>
+                        <button onclick="setTxnDateRange('week')" class="txn-date-pill flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all press">This Week</button>
+                        <button onclick="setTxnDateRange('month')" class="txn-date-pill flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all press active">This Month</button>
+                        <button onclick="setTxnDateRange('all')" class="txn-date-pill flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all press">All Time</button>
+                    </div>
+                    <!-- Source + Status Filters -->
+                    <div class="flex gap-2">
+                        <select id="filter-source" onchange="loadTransactions()" class="flex-1 text-[13px] bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white">
+                            <option value="">All Sources</option>
+                        </select>
+                        <select id="filter-status" onchange="loadTransactions()" class="flex-1 text-[13px] bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="received">Received</option>
+                            <option value="disputed">Disputed</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <main class="px-4 py-4 pb-28">
+            <div id="transaction-list" class="space-y-2">
+                <div class="glass rounded-3xl ring-1 ring-white/10 py-12 text-center">
+                    <svg class="w-12 h-12 mx-auto text-slate-600 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    <p class="text-[17px] font-semibold text-slate-400">No transactions yet</p>
                 </div>
             </div>
         </main>
