@@ -1120,20 +1120,27 @@ function txnExpandableRow(t, idx) {
         na: { bg: 'bg-white/5', text: 'text-slate-400', border: 'border-white/10' }
     };
     const s = statusStyles[t.status] || statusStyles.na;
-    const date = new Date(t.transaction_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const date = new Date(t.transaction_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
     const color = t.source_color || '#6366f1';
+    const displayName = t.source_name_display || t.source_name || 'Transaction';
+    const displayType = t.source_type || t.transaction_type || 'credit';
 
-    const upiHtml = t.source_type === 'upi' && t.upi_numbers_detail?.length
+    const cashback = t.status === 'received' && t.actual_cashback
+        ? `<span class="text-[13px] text-emerald-400 font-medium">+₹${fmt(t.actual_cashback)}</span>`
+        : t.expected_cashback > 0
+            ? `<span class="text-[13px] text-slate-500">~₹${fmt(t.expected_cashback)}</span>`
+            : '';
+
+    const upiHtml = displayType === 'upi' && t.upi_numbers_detail?.length
         ? `<div class="flex flex-wrap gap-1.5 mt-2">
             <span class="text-[12px] text-slate-400">UPI IDs:</span>
             ${t.upi_numbers_detail.map(u => `<span class="text-[12px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg px-2 py-0.5">${esc(u.upi_id)}</span>`).join('')}
            </div>`
         : '';
 
-    const cashbackLine = (t.expected_cashback > 0 || t.actual_cashback > 0)
+    const cashbackLine = (t.actual_cashback > 0)
         ? `<div class="flex gap-4 text-[13px] mt-1">
-            ${t.expected_cashback > 0 ? `<span class="text-slate-400">Expected: <span class="text-white font-medium">₹${fmt(t.expected_cashback)}</span></span>` : ''}
-            ${t.actual_cashback > 0 ? `<span class="text-emerald-400">Received: <span class="font-medium">₹${fmt(t.actual_cashback)}</span></span>` : ''}
+            <span class="text-emerald-400">Received: <span class="font-medium">₹${fmt(t.actual_cashback)}</span></span>
            </div>`
         : '';
 
@@ -1152,14 +1159,17 @@ function txnExpandableRow(t, idx) {
     return `
         <div class="stagger glass rounded-2xl ring-1 ring-white/10 overflow-hidden" style="animation-delay:${Math.min(idx, 10) * 30}ms">
             <div class="flex items-center px-4 py-3.5 press cursor-pointer" onclick="toggleTxnExpand(${t.id})">
-                <div class="w-2 h-2 rounded-full flex-shrink-0 mr-3" style="background:${color}"></div>
+                <div class="w-2 h-2 rounded-full flex-shrink-0 mr-3 glow-dot" style="background:${color};box-shadow:0 0 8px ${color}99;"></div>
                 <div class="flex-1 min-w-0">
-                    <p class="text-[15px] font-medium text-white truncate">${esc(t.merchant)}</p>
-                    <p class="text-[12px] text-slate-400 mt-0.5">${esc(t.source_name || '')} · ${date}</p>
+                    <p class="text-[15px] font-semibold text-white truncate">${esc(displayName)}</p>
+                    <p class="text-[13px] text-slate-400 mt-0.5">${esc(displayType)} · ${date}</p>
                 </div>
                 <div class="text-right ml-3 flex-shrink-0">
-                    <p class="text-[15px] font-semibold text-white">₹${fmt(t.amount)}</p>
-                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.text} border ${s.border}">${t.status}</span>
+                    <p class="text-[16px] font-semibold text-white">₹${fmt(t.amount)}</p>
+                    <div class="flex items-center justify-end gap-1.5 mt-0.5">
+                        ${cashback}
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${s.bg} ${s.text} border ${s.border}">${t.status}</span>
+                    </div>
                 </div>
                 <svg class="w-4 h-4 text-slate-600 ml-2 flex-shrink-0 transition-transform duration-200 txn-chevron-${t.id}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
             </div>
