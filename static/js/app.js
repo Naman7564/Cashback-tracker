@@ -894,8 +894,6 @@ async function saveTransaction(e) {
 
     const status = document.getElementById('txn-status').value;
     if (status) body.status = status;
-    const actual = document.getElementById('txn-actual').value;
-    if (actual !== '') body.actual_cashback = parseFloat(actual);
 
     try {
         if (editId) {
@@ -928,9 +926,6 @@ async function editTransaction(id) {
 
         document.getElementById('txn-status-group').classList.remove('hidden');
         setTxnStatus(t.status);
-        if (t.actual_cashback != null) {
-            document.getElementById('txn-actual').value = t.actual_cashback;
-        }
 
         const title = document.querySelector('#sheet-transaction h2');
         title.textContent = 'Edit Transaction';
@@ -952,7 +947,6 @@ function setTxnStatus(status) {
             btn.classList.add('text-slate-400');
         }
     });
-    document.getElementById('actual-cashback-group').classList.toggle('hidden', status !== 'received');
 }
 
 // ──── CRUD: Source ────
