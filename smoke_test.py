@@ -27,8 +27,8 @@ assert ofr.id, "Offer creation failed"
 
 # Create transaction
 txn = Transaction.objects.create(
-    source=src, offer=ofr, amount=Decimal('1000.00'), merchant='BigBasket',
-    category='Groceries', expected_cashback=Decimal('50.00'),
+    source=src, source_name='Amazon Pay', offer=ofr, amount=Decimal('1000.00'),
+    transaction_type='credit', category='Groceries', expected_cashback=Decimal('50.00'),
     transaction_date=date.today(), status='pending'
 )
 assert txn.statement_month == f"{date.today().year}-{date.today().month:02d}", f"Statement month wrong: {txn.statement_month}"

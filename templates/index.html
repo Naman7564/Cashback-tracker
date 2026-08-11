@@ -366,27 +366,25 @@
                 <div class="glass-strong rounded-2xl overflow-hidden">
                     <div class="flex items-center justify-between px-4 py-3.5">
                         <span class="text-[13px] font-semibold uppercase tracking-wider text-slate-400">Source</span>
-                        <select id="txn-source" required class="text-[16px] text-indigo-400 text-right bg-transparent border-0 pr-0 max-w-[60%]">
-                            <option value="">Select...</option>
-                        </select>
+                        <input type="text" id="txn-source-name" required autocomplete="off" autocapitalize="words" class="text-[16px] text-right bg-transparent border-0 w-[60%] p-0 text-white placeholder-slate-500" placeholder="e.g., Amazon Pay, PhonePe, HDFC">
                     </div>
                     <div class="glass-sep ml-4"></div>
                     <div class="flex items-center justify-between px-4 py-3.5">
-                        <span class="text-[13px] font-semibold uppercase tracking-wider text-slate-400">Amount</span>
+                        <span class="text-[13px] font-semibold uppercase tracking-wider text-slate-400">Type</span>
+                        <div class="flex p-0.5 bg-slate-800/80 rounded-xl border border-white/10" id="txn-type-selector">
+                            <button type="button" onclick="setTxnType('credit')" class="txn-type-btn px-3 py-1 rounded-lg text-[13px] font-semibold transition-all bg-gradient-to-r from-indigo-600 to-violet-600 text-white" data-type="credit">Credit</button>
+                            <button type="button" onclick="setTxnType('debit')" class="txn-type-btn px-3 py-1 rounded-lg text-[13px] font-semibold transition-all text-slate-400" data-type="debit">Debit</button>
+                            <button type="button" onclick="setTxnType('upi')" class="txn-type-btn px-3 py-1 rounded-lg text-[13px] font-semibold transition-all text-slate-400" data-type="upi">UPI App</button>
+                        </div>
+                        <input type="hidden" id="txn-type" value="credit">
+                    </div>
+                    <div class="glass-sep ml-4"></div>
+                    <div class="flex items-center justify-between px-4 py-3.5">
+                        <span class="text-[13px] font-semibold uppercase tracking-wider text-slate-400">Trans Amount</span>
                         <div class="flex items-center">
                             <span class="text-[16px] text-slate-500 mr-1">₹</span>
                             <input type="number" id="txn-amount" required step="0.01" min="0" inputmode="decimal" class="text-[16px] text-right bg-transparent border-0 w-28 p-0 text-white placeholder-slate-500" placeholder="0.00">
                         </div>
-                    </div>
-                    <div class="glass-sep ml-4"></div>
-                    <div class="flex items-center justify-between px-4 py-3.5">
-                        <span class="text-[13px] font-semibold uppercase tracking-wider text-slate-400">Merchant</span>
-                        <input type="text" id="txn-merchant" required autocomplete="off" autocapitalize="words" class="text-[16px] text-right bg-transparent border-0 w-[55%] p-0 text-white placeholder-slate-500" placeholder="Enter name">
-                    </div>
-                    <div class="glass-sep ml-4"></div>
-                    <div class="flex items-center justify-between px-4 py-3.5">
-                        <span class="text-[13px] font-semibold uppercase tracking-wider text-slate-400">Category</span>
-                        <input type="text" id="txn-category" autocomplete="off" autocapitalize="words" class="text-[16px] text-right bg-transparent border-0 w-[55%] p-0 text-white placeholder-slate-500" placeholder="Optional">
                     </div>
                     <div class="glass-sep ml-4"></div>
                     <div class="flex items-center justify-between px-4 py-3.5">

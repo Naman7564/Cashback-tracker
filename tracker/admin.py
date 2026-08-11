@@ -18,6 +18,6 @@ class OfferAdmin(admin.ModelAdmin):
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('merchant', 'amount', 'source', 'expected_cashback', 'actual_cashback', 'status', 'transaction_date')
-    list_filter = ('status', 'statement_month')
-    search_fields = ('merchant',)
+    list_display = ('source_name', 'amount', 'source', 'transaction_type', 'expected_cashback', 'actual_cashback', 'status', 'transaction_date')
+    list_filter = ('status', 'statement_month', 'transaction_type')
+    search_fields = ('source_name',)

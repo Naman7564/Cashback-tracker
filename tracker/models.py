@@ -43,10 +43,11 @@ class Offer(models.Model):
 class Transaction(models.Model):
     STATUS_CHOICES = [('pending', 'Pending'), ('received', 'Received'), ('disputed', 'Disputed'), ('na', 'N/A')]
 
-    source = models.ForeignKey(PaymentSource, on_delete=models.CASCADE, related_name='transactions')
+    source = models.ForeignKey(PaymentSource, on_delete=models.CASCADE, null=True, blank=True, related_name='transactions')
+    source_name = models.CharField(max_length=200, blank=True)
+    transaction_type = models.CharField(max_length=20, default='credit')
     offer = models.ForeignKey(Offer, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    merchant = models.CharField(max_length=200)
     category = models.CharField(max_length=100, blank=True)
     expected_cashback = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     actual_cashback = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -66,7 +67,8 @@ class Transaction(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.merchant} - ₹{self.amount} ({self.status})"
+        name = self.source_name or (self.source.name if self.source else 'Unknown')
+        return f"{name} - ₹{self.amount} ({self.status})"
 
 
 class UPINumber(models.Model):

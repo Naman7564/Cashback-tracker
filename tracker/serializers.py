@@ -36,9 +36,9 @@ class OfferSerializer(serializers.ModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
-    source_name = serializers.ReadOnlyField(source='source.name')
-    source_color = serializers.ReadOnlyField(source='source.color')
-    source_type = serializers.ReadOnlyField(source='source.source_type')
+    source_name_display = serializers.SerializerMethodField()
+    source_color = serializers.SerializerMethodField()
+    source_type = serializers.SerializerMethodField()
     upi_number_ids = serializers.PrimaryKeyRelatedField(
         source='upi_numbers', queryset=UPINumber.objects.all(),
         many=True, required=False
@@ -48,3 +48,12 @@ class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = '__all__'
+
+    def get_source_name_display(self, obj):
+        return obj.source_name or (obj.source.name if obj.source else '')
+
+    def get_source_color(self, obj):
+        return obj.source.color if obj.source else '#64748b'
+
+    def get_source_type(self, obj):
+        return obj.transaction_type or (obj.source.source_type if obj.source else 'credit')

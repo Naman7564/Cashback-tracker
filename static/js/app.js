@@ -409,12 +409,14 @@ function txnRow(t, swipeable = false) {
             ? `<span class="text-[13px] text-slate-500">~₹${fmt(t.expected_cashback)}</span>`
             : '';
 
+    const displayName = t.source_name_display || t.source_name || '';
+    const displayType = t.source_type || t.transaction_type || 'credit';
     const inner = `
         <div class="flex items-center px-4 py-3.5 press active:bg-white/10 transition-colors" onclick="editTransaction(${t.id})">
             <div class="w-2 h-2 rounded-full flex-shrink-0 mr-3 glow-dot" style="background:${color};box-shadow:0 0 8px ${color}99;"></div>
             <div class="flex-1 min-w-0">
-                <p class="text-[16px] font-semibold text-white truncate">${esc(t.merchant)}</p>
-                <p class="text-[13px] text-slate-400 mt-0.5">${esc(t.source_name || '')} · ${date}</p>
+                <p class="text-[16px] font-semibold text-white truncate">${esc(displayName)}</p>
+                <p class="text-[13px] text-slate-400 mt-0.5">${esc(displayType)} · ${date}</p>
             </div>
             <div class="text-right ml-3 flex-shrink-0">
                 <p class="text-[16px] font-semibold text-white">₹${fmt(t.amount)}</p>
@@ -828,7 +830,7 @@ async function loadSourceOptions() {
 
 // ──── Auto Cashback Calc ────
 function setupCashbackCalc() {
-    ['txn-source', 'txn-amount', 'txn-category'].forEach(id => {
+    ['txn-source', 'txn-amount'].forEach(id => {
         document.getElementById(id).addEventListener('input', debouncedCalc);
         document.getElementById(id).addEventListener('change', debouncedCalc);
     });
@@ -842,13 +844,12 @@ function debouncedCalc() {
 async function calcCashback() {
     const source = document.getElementById('txn-source').value;
     const amount = document.getElementById('txn-amount').value;
-    const category = document.getElementById('txn-category').value;
     if (!source || !amount) return;
 
     try {
         const data = await api('calculate-cashback/', {
             method: 'POST',
-            body: { source_id: parseInt(source), amount: parseFloat(amount), category }
+            body: { source_id: parseInt(source), amount: parseFloat(amount) }
         });
         const preview = document.getElementById('cashback-preview');
         if (data.cashback > 0) {
@@ -863,15 +864,27 @@ async function calcCashback() {
     } catch (e) { /* silent */ }
 }
 
+function setTxnType(type) {
+    document.getElementById('txn-type').value = type;
+    document.querySelectorAll('.txn-type-btn').forEach(btn => {
+        if (btn.dataset.type === type) {
+            btn.classList.add('bg-gradient-to-r', 'from-indigo-600', 'to-violet-600', 'text-white');
+            btn.classList.remove('text-slate-400');
+        } else {
+            btn.classList.remove('bg-gradient-to-r', 'from-indigo-600', 'to-violet-600', 'text-white');
+            btn.classList.add('text-slate-400');
+        }
+    });
+}
+
 // ──── CRUD: Transaction ────
 async function saveTransaction(e) {
     e.preventDefault();
     const editId = document.getElementById('txn-edit-id').value;
     const body = {
-        source: parseInt(document.getElementById('txn-source').value),
+        source_name: document.getElementById('txn-source-name').value,
+        transaction_type: document.getElementById('txn-type').value,
         amount: parseFloat(document.getElementById('txn-amount').value),
-        merchant: document.getElementById('txn-merchant').value,
-        category: document.getElementById('txn-category').value,
         transaction_date: document.getElementById('txn-date').value,
         expected_cashback: parseFloat(document.getElementById('txn-cashback').value) || 0,
         notes: document.getElementById('txn-notes').value,
@@ -905,10 +918,9 @@ async function editTransaction(id) {
     try {
         const t = await api(`transactions/${id}/`);
         document.getElementById('txn-edit-id').value = t.id;
-        document.getElementById('txn-source').value = t.source;
+        document.getElementById('txn-source-name').value = t.source_name || (t.source ? t.source_name_display : '');
+        setTxnType(t.transaction_type || 'credit');
         document.getElementById('txn-amount').value = t.amount;
-        document.getElementById('txn-merchant').value = t.merchant;
-        document.getElementById('txn-category').value = t.category || '';
         document.getElementById('txn-date').value = t.transaction_date;
         document.getElementById('txn-cashback').value = t.expected_cashback;
         document.getElementById('txn-notes').value = t.notes || '';
