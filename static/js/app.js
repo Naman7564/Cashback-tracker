@@ -533,7 +533,7 @@ function sourceCard(s, idx) {
                 </button>
             </div>
             <!-- Card Content Layer -->
-            <div class="swipe-source-content rounded-3xl p-5 ring-1 ring-white/10 press bg-slate-900/95 backdrop-blur-2xl relative z-10 transition-transform duration-200" onclick="handleSourceCardClick(event, ${s.id})">
+            <div class="swipe-source-content rounded-3xl p-5 ring-1 ring-white/10 bg-slate-900 active:bg-slate-850 relative z-10 transition-transform duration-200" onclick="handleSourceCardClick(event, ${s.id})">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
                         <div class="w-3 h-3 rounded-full glow-dot" style="background:${s.color};box-shadow:0 0 10px ${s.color}88;"></div>
