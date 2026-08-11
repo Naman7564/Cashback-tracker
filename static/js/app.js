@@ -30,7 +30,10 @@ async function api(path, opts = {}) {
 // ──── Navigation ────
 function navigate(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(`page-${page}`).classList.add('active');
+    // ponytail: kill old stagger classes before display:block restarts CSS animations
+    const target = document.getElementById(`page-${page}`);
+    target.querySelectorAll('.stagger').forEach(el => el.classList.remove('stagger'));
+    target.classList.add('active');
     currentPage = page;
     history.pushState({ page }, '', page === 'home' ? '/' : `/${page}/`);
     updateTabBar();
@@ -53,7 +56,9 @@ function updateTabBar() {
 window.addEventListener('popstate', (e) => {
     const page = e.state?.page || pathToPage();
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(`page-${page}`).classList.add('active');
+    const target = document.getElementById(`page-${page}`);
+    target.querySelectorAll('.stagger').forEach(el => el.classList.remove('stagger'));
+    target.classList.add('active');
     currentPage = page;
     updateTabBar();
 });
