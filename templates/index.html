@@ -114,7 +114,7 @@
         <header class="sticky top-0 z-20" style="padding-top: env(safe-area-inset-top, 0px);">
             <div class="bg-black/30 backdrop-blur-xl border-b border-white/5 px-5 py-3 flex justify-between items-center">
                 <h1 class="text-[28px] font-bold text-white tracking-tight">Cashback</h1>
-                <button class="w-9 h-9 rounded-full glass flex items-center justify-center press">
+                <button onclick="openSheet('sheet-settings')" class="w-9 h-9 rounded-full glass flex items-center justify-center press">
                     <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93s.844.117 1.183-.123l.753-.564a1.148 1.148 0 011.57.159l.773.773c.43.43.476 1.11.159 1.57l-.564.753c-.24.339-.3.784-.123 1.183s.506.71.93.78l.894.149c.542.09.94.56.94 1.11v1.093c0 .55-.398 1.02-.94 1.11l-.894.149c-.424.07-.764.384-.93.78s-.117.844.123 1.183l.564.753c.317.46.271 1.14-.159 1.57l-.773.773a1.148 1.148 0 01-1.57.159l-.753-.564c-.339-.24-.784-.3-1.183-.123s-.71.506-.78.93l-.149.894c-.09.542-.56.94-1.11.94h-1.093c-.55 0-1.02-.398-1.11-.94l-.149-.894c-.07-.424-.384-.764-.78-.93s-.844-.117-1.183.123l-.753.564a1.148 1.148 0 01-1.57-.159l-.773-.773a1.148 1.148 0 01-.159-1.57l.564-.753c.24-.339.3-.784.123-1.183s-.506-.71-.93-.78l-.894-.149c-.542-.09-.94-.56-.94-1.11v-1.093c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.764-.384.93-.78s.117-.844-.123-1.183l-.564-.753a1.148 1.148 0 01.159-1.57l.773-.773a1.148 1.148 0 011.57-.159l.753.564c.339.24.784.3 1.183.123s.71-.506.78-.93l.149-.894z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 </button>
             </div>
@@ -639,6 +639,101 @@
                 <button onclick="recordTodoTransaction()" class="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold text-[17px] press shadow-lg shadow-indigo-500/25 border border-indigo-400/20">
                     Record Transaction
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== SETTINGS SHEET ===== -->
+    <div id="sheet-settings" class="fixed inset-0 z-50 hidden">
+        <div class="sheet-backdrop absolute inset-0" onclick="closeSheet('sheet-settings')"></div>
+        <div class="sheet-panel absolute bottom-0 left-0 right-0 max-w-lg mx-auto rounded-t-[32px] max-h-[90vh] overflow-y-auto bg-slate-900/90 backdrop-blur-2xl border-t border-white/10 p-6" style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);">
+            <div class="flex justify-center -mt-2 pb-4 sheet-handle cursor-grab">
+                <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+            </div>
+
+            <!-- Root View -->
+            <div id="settings-view-main">
+                <div class="flex justify-between items-center pb-4">
+                    <h2 class="text-[20px] font-bold text-white">Settings</h2>
+                    <button onclick="closeSheet('sheet-settings')" class="text-indigo-400 font-medium">Done</button>
+                </div>
+                <div class="space-y-3">
+                    <button onclick="openSettingsSubView('export')" class="w-full glass rounded-2xl p-4 flex items-center justify-between text-white press">
+                        <span class="font-medium">📤 Export Data</span>
+                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                    <button onclick="openSettingsSubView('backup')" class="w-full glass rounded-2xl p-4 flex items-center justify-between text-white press">
+                        <span class="font-medium">💾 Backup & Restore</span>
+                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                    <div class="glass rounded-2xl p-4 flex items-center justify-between text-slate-400">
+                        <span class="font-medium">ℹ️ About</span>
+                        <span class="text-sm font-semibold">v1.0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Sub-View -->
+            <div id="settings-view-export" class="hidden">
+                <div class="flex items-center pb-4 gap-3">
+                    <button onclick="openSettingsSubView('main')" class="text-indigo-400 font-medium flex items-center gap-1">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg> Back
+                    </button>
+                    <h2 class="text-[20px] font-bold text-white">Export Data</h2>
+                </div>
+                <div class="space-y-3">
+                    <button onclick="exportData('csv')" class="w-full glass rounded-2xl p-4 flex items-center justify-between text-white press">
+                        <div>
+                            <p class="font-medium text-left">📄 Export as CSV</p>
+                            <p class="text-[13px] text-slate-400 mt-0.5">Download transactions spreadsheet</p>
+                        </div>
+                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                    <button onclick="exportData('json')" class="w-full glass rounded-2xl p-4 flex items-center justify-between text-white press">
+                        <div>
+                            <p class="font-medium text-left">🗂️ Export as JSON</p>
+                            <p class="text-[13px] text-slate-400 mt-0.5">Full data backup file</p>
+                        </div>
+                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Backup & Restore Sub-View -->
+            <div id="settings-view-backup" class="hidden">
+                <div class="flex items-center pb-4 gap-3">
+                    <button onclick="openSettingsSubView('main')" class="text-indigo-400 font-medium flex items-center gap-1">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg> Back
+                    </button>
+                    <h2 class="text-[20px] font-bold text-white">Backup & Restore</h2>
+                </div>
+                <div class="space-y-4">
+                    <button onclick="downloadBackup()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3.5 rounded-2xl press shadow-lg shadow-indigo-500/20">
+                        Download Database Backup
+                    </button>
+                    <div class="text-center text-[12px] text-slate-500 font-semibold uppercase tracking-wider">— or —</div>
+                    <button onclick="triggerRestorePicker()" class="w-full glass border border-emerald-500/30 text-emerald-300 font-semibold py-3.5 rounded-2xl press">
+                        Restore from File
+                    </button>
+                    <input type="file" id="restore-file-input" class="hidden" accept=".sqlite3,.sqlite,.db,.json" onchange="handleRestoreFile(event)">
+                    <p class="text-[12px] text-amber-400/80 text-center mt-1">⚠️ Restoring will replace your current data</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== RESTORE CONFIRMATION SHEET ===== -->
+    <div id="sheet-restore-confirm" class="fixed inset-0 z-50 hidden">
+        <div class="sheet-backdrop absolute inset-0" onclick="closeSheet('sheet-restore-confirm')"></div>
+        <div class="sheet-panel absolute bottom-0 left-0 right-0 max-w-lg mx-auto rounded-t-[32px] bg-slate-900/90 backdrop-blur-2xl border-t border-white/10 p-6" style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);">
+            <div class="flex justify-center -mt-2 pb-4 sheet-handle cursor-grab">
+                <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+            </div>
+            <h2 class="text-[20px] font-bold text-white text-center">Replace All Data?</h2>
+            <p class="text-[14px] text-slate-400 text-center mt-2">This will replace all your current sources, transactions, and offers with the uploaded file.</p>
+            <div class="flex gap-3 mt-6">
+                <button type="button" onclick="closeSheet('sheet-restore-confirm')" class="flex-1 py-3.5 rounded-2xl glass font-semibold text-white press">Cancel</button>
+                <button type="button" onclick="executeRestore()" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-500 font-semibold text-white press shadow-lg shadow-rose-500/25">Restore</button>
             </div>
         </div>
     </div>

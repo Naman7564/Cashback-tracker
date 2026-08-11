@@ -14,4 +14,8 @@ urlpatterns = [
     path('dashboard-stats/', views.dashboard_stats),
     path('todo/', views.todo_list),
     path('todo/record/', views.todo_record),
+    path('export/csv/', views.export_csv),
+    path('export/json/', views.export_json),
+    path('backup/download/', views.backup_download),
+    path('backup/restore/', views.backup_restore),
 ]

@@ -1,5 +1,12 @@
+import csv
+import json
+import os
+import shutil
 from datetime import date
 from decimal import Decimal
+from django.conf import settings
+from django.http import HttpResponse, FileResponse
+from django.db import transaction as db_transaction
 from django.db.models import Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from rest_framework import viewsets, status
@@ -10,6 +17,125 @@ from .serializers import (
     PaymentSourceSerializer, OfferSerializer, TransactionSerializer,
     UPINumberSerializer
 )
+
+
+@api_view(['GET'])
+def export_csv(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="cashback_transactions.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Date', 'Source', 'Type', 'Amount', 'Cashback', 'Status', 'Notes'])
+
+    txns = Transaction.objects.select_related('source').all().order_by('-transaction_date')
+    for t in txns:
+        source_name = t.source_name or (t.source.name if t.source else '')
+        source_type = t.transaction_type or (t.source.source_type if t.source else '')
+        cashback = t.actual_cashback if t.status == 'received' and t.actual_cashback is not None else t.expected_cashback
+        writer.writerow([
+            t.transaction_date,
+            source_name,
+            source_type,
+            t.amount,
+            cashback,
+            t.status,
+            t.notes or ''
+        ])
+
+    return response
+
+
+@api_view(['GET'])
+def export_json(request):
+    data = {
+        'sources': PaymentSourceSerializer(PaymentSource.objects.all(), many=True).data,
+        'offers': OfferSerializer(Offer.objects.all(), many=True).data,
+        'transactions': TransactionSerializer(Transaction.objects.all(), many=True).data,
+        'upi_numbers': UPINumberSerializer(UPINumber.objects.all(), many=True).data,
+    }
+    response = HttpResponse(json.dumps(data, indent=2), content_type='application/json')
+    response['Content-Disposition'] = 'attachment; filename="cashback_backup.json"'
+    return response
+
+
+@api_view(['GET'])
+def backup_download(request):
+    db_path = settings.DATABASES['default']['NAME']
+    if not os.path.exists(db_path):
+        return Response({'error': 'Database file not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    response = FileResponse(open(db_path, 'rb'), content_type='application/x-sqlite3')
+    response['Content-Disposition'] = 'attachment; filename="db.sqlite3"'
+    return response
+
+
+@api_view(['POST'])
+def backup_restore(request):
+    uploaded_file = request.FILES.get('file')
+    if not uploaded_file:
+        return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+    filename = uploaded_file.name.lower()
+    if filename.endswith('.json'):
+        try:
+            content = json.loads(uploaded_file.read().decode('utf-8'))
+        except Exception:
+            return Response({'error': 'Invalid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with db_transaction.atomic():
+            Transaction.objects.all().delete()
+            Offer.objects.all().delete()
+            UPINumber.objects.all().delete()
+            PaymentSource.objects.all().delete()
+
+            for s in content.get('sources', []):
+                PaymentSource.objects.create(
+                    id=s['id'], name=s['name'], source_type=s['source_type'],
+                    provider=s['provider'], network=s.get('network', ''),
+                    color=s.get('color', '#3b82f6'), daily_target=s.get('daily_target', 0),
+                    is_active=s.get('is_active', True)
+                )
+            for u in content.get('upi_numbers', []):
+                UPINumber.objects.create(
+                    id=u['id'], source_id=u['source'], upi_id=u['upi_id'],
+                    label=u.get('label', ''), is_active=u.get('is_active', True)
+                )
+            for o in content.get('offers', []):
+                Offer.objects.create(
+                    id=o['id'], source_id=o['source'], category=o['category'],
+                    offer_type=o['offer_type'], value=o['value'],
+                    max_cap=o.get('max_cap'), valid_from=o['valid_from'],
+                    valid_until=o['valid_until'], terms=o.get('terms', ''),
+                    is_active=o.get('is_active', True)
+                )
+            for t in content.get('transactions', []):
+                txn = Transaction.objects.create(
+                    id=t['id'], source_id=t.get('source'),
+                    source_name=t.get('source_name', ''),
+                    transaction_type=t.get('transaction_type', 'credit'),
+                    offer_id=t.get('offer'), amount=t['amount'],
+                    expected_cashback=t.get('expected_cashback', 0),
+                    actual_cashback=t.get('actual_cashback'),
+                    status=t.get('status', 'pending'),
+                    transaction_date=t['transaction_date'],
+                    notes=t.get('notes', '')
+                )
+                if t.get('upi_number_ids'):
+                    txn.upi_numbers.set(t['upi_number_ids'])
+
+        return Response({'message': 'JSON restored successfully'})
+
+    elif filename.endswith('.sqlite3') or filename.endswith('.db') or filename.endswith('.sqlite'):
+        db_path = settings.DATABASES['default']['NAME']
+        try:
+            with open(db_path, 'wb') as destination:
+                for chunk in uploaded_file.chunks():
+                    destination.write(chunk)
+            return Response({'message': 'SQLite database restored successfully'})
+        except Exception as e:
+            return Response({'error': f'Failed to restore database: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({'error': 'Unsupported file format. Please upload .sqlite3 or .json'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PaymentSourceViewSet(viewsets.ModelViewSet):

@@ -15,8 +15,9 @@ let todoData = null; // cached todo list response
 // ──── API Helper ────
 async function api(path, opts = {}) {
     const url = path.startsWith('http') ? path : `${API}/${path}`;
-    const config = { headers: { 'Content-Type': 'application/json' }, ...opts };
-    if (opts.body && typeof opts.body === 'object') config.body = JSON.stringify(opts.body);
+    const headers = opts.body instanceof FormData ? {} : { 'Content-Type': 'application/json' };
+    const config = { headers, ...opts };
+    if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) config.body = JSON.stringify(opts.body);
     const res = await fetch(url, config);
     if (!res.ok) {
         let msg = `API ${res.status}`;
@@ -1217,6 +1218,69 @@ async function deleteTxn(id) {
 function setStatusFilter(val) {
     statusFilter = val;
     haptic(10);
+}
+
+// ──── Settings & Export/Backup ────
+let pendingRestoreFile = null;
+
+function openSettingsSubView(view) {
+    document.getElementById('settings-view-main').classList.toggle('hidden', view !== 'main');
+    document.getElementById('settings-view-export').classList.toggle('hidden', view !== 'export');
+    document.getElementById('settings-view-backup').classList.toggle('hidden', view !== 'backup');
+}
+
+function exportData(type) {
+    if (type === 'csv') {
+        window.location.href = '/api/export/csv/';
+        toast('CSV downloaded');
+    } else if (type === 'json') {
+        window.location.href = '/api/export/json/';
+        toast('Backup JSON downloaded');
+    }
+}
+
+function downloadBackup() {
+    window.location.href = '/api/backup/download/';
+    toast('Database backup saved');
+}
+
+function triggerRestorePicker() {
+    const input = document.getElementById('restore-file-input');
+    input.value = '';
+    input.click();
+}
+
+function handleRestoreFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    pendingRestoreFile = file;
+    openSheet('sheet-restore-confirm');
+}
+
+async function executeRestore() {
+    if (!pendingRestoreFile) return;
+    closeSheet('sheet-restore-confirm');
+    closeSheet('sheet-settings');
+
+    const formData = new FormData();
+    formData.append('file', pendingRestoreFile);
+
+    try {
+        await api('backup/restore/', {
+            method: 'POST',
+            body: formData
+        });
+        haptic(20);
+        toast('Database restored. Refreshing...');
+        setTimeout(() => {
+            window.location.reload();
+        }, 1200);
+    } catch (e) {
+        haptic([50, 50, 50]);
+        toast('Restore failed: ' + e.message, true);
+    } finally {
+        pendingRestoreFile = null;
+    }
 }
 
 // ──── Haptic Feedback ────
