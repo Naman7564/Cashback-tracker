@@ -9,7 +9,7 @@ urlpatterns = [
     path('api/', include('tracker.urls')),
     path('todo/', TemplateView.as_view(template_name='index.html'), name='todo'),
     path('cards/', TemplateView.as_view(template_name='index.html'), name='cards'),
-    path('offers/', TemplateView.as_view(template_name='index.html'), name='offers'),
+    path('analytics/', TemplateView.as_view(template_name='index.html'), name='analytics'),
     path('transactions/', TemplateView.as_view(template_name='index.html'), name='transactions'),
     path('', TemplateView.as_view(template_name='index.html'), name='home'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

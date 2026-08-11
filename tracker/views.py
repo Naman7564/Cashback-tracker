@@ -240,6 +240,132 @@ def calculate_cashback(request):
 
 
 @api_view(['GET'])
+def analytics_data(request):
+    period = request.query_params.get('period', 'month')
+    today = date.today()
+
+    qs = Transaction.objects.all()
+
+    if period == 'month':
+        qs = qs.filter(transaction_date__year=today.year, transaction_date__month=today.month)
+    elif period == 'last_month':
+        first_of_this_month = date(today.year, today.month, 1)
+        last_month = first_of_this_month - timedelta(days=1)
+        qs = qs.filter(transaction_date__year=last_month.year, transaction_date__month=last_month.month)
+    elif period == 'quarter':
+        start_date = today - timedelta(days=90)
+        qs = qs.filter(transaction_date__gte=start_date)
+    elif period == 'year':
+        qs = qs.filter(transaction_date__year=today.year)
+    # 'all' uses all records
+
+    cashback_expr = Coalesce('actual_cashback', 'expected_cashback', Value(0), output_field=DecimalField())
+
+    total_earned = qs.aggregate(total=Sum(cashback_expr))['total'] or Decimal('0.00')
+
+    # Best source calculation
+    best_source_data = None
+    sources_totals = {}
+    for t in qs:
+        name = t.source_name or (t.source.name if t.source else 'Other')
+        color = t.source.color if t.source else '#6366f1'
+        cb = t.actual_cashback if (t.status == 'received' and t.actual_cashback is not None) else t.expected_cashback
+        cb = float(cb or 0)
+        if name not in sources_totals:
+            sources_totals[name] = {'amount': 0.0, 'color': color}
+        sources_totals[name]['amount'] += cb
+
+    if sources_totals:
+        best_name = max(sources_totals, key=lambda k: sources_totals[k]['amount'])
+        if sources_totals[best_name]['amount'] > 0:
+            best_source_data = {
+                'name': best_name,
+                'amount': float(Decimal(str(sources_totals[best_name]['amount'])).quantize(Decimal('0.01'))),
+                'color': sources_totals[best_name]['color']
+            }
+
+    # Daily trend (for month/last_month/quarter or default)
+    daily_trend = []
+    if period in ['month', 'last_month']:
+        days_in_month = 31
+        if period == 'month':
+            m = today.month
+            y = today.year
+        else:
+            first = date(today.year, today.month, 1)
+            lm = first - timedelta(days=1)
+            m = lm.month
+            y = lm.year
+
+        import calendar
+        days_in_month = calendar.monthrange(y, m)[1]
+
+        daily_map = {d: 0.0 for d in range(1, days_in_month + 1)}
+        for t in qs:
+            d = t.transaction_date.day
+            cb = t.actual_cashback if (t.status == 'received' and t.actual_cashback is not None) else t.expected_cashback
+            daily_map[d] += float(cb or 0)
+
+        daily_trend = [{'day': d, 'earned': float(Decimal(str(v)).quantize(Decimal('0.01')))} for d, v in daily_map.items()]
+    else:
+        # Fallback daily/sample trend
+        daily_trend = [{'day': i, 'earned': 0.0} for i in range(1, 31)]
+
+    # Source breakdown & top sources
+    tot_earned_float = float(total_earned)
+    source_breakdown = []
+    top_sources = []
+    sorted_sources = sorted(sources_totals.items(), key=lambda x: x[1]['amount'], reverse=True)
+
+    rank = 1
+    for name, sdata in sorted_sources:
+        amt = sdata['amount']
+        pct = round((amt / tot_earned_float * 100), 1) if tot_earned_float > 0 else 0
+        amt_fmt = float(Decimal(str(amt)).quantize(Decimal('0.01')))
+        source_breakdown.append({
+            'source': name,
+            'amount': amt_fmt,
+            'color': sdata['color'],
+            'percentage': pct
+        })
+        if rank <= 5:
+            top_sources.append({
+                'rank': rank,
+                'name': name,
+                'amount': amt_fmt,
+                'color': sdata['color']
+            })
+            rank += 1
+
+    # Monthly comparison (last 6 months)
+    monthly_comparison = []
+    for i in range(5, -1, -1):
+        m_date = today - timedelta(days=i*30)
+        m_qs = Transaction.objects.filter(transaction_date__year=m_date.year, transaction_date__month=m_date.month)
+        m_earned = m_qs.aggregate(total=Sum(cashback_expr))['total'] or Decimal('0.00')
+        monthly_comparison.append({
+            'month': m_date.strftime('%b'),
+            'earned': float(m_earned)
+        })
+
+    period_str = f"{today.year}-{today.month:02d}"
+    if period == 'last_month':
+        first = date(today.year, today.month, 1)
+        lm = first - timedelta(days=1)
+        period_str = f"{lm.year}-{lm.month:02d}"
+
+    return Response({
+        'period': period_str,
+        'total_earned': float(total_earned),
+        'best_source': best_source_data,
+        'daily_trend': daily_trend,
+        'source_breakdown': source_breakdown,
+        'top_sources': top_sources,
+        'monthly_comparison': monthly_comparison
+    })
+
+
+@api_view(['GET'])
 def dashboard_stats(request):
     today = date.today()
     month = f"{today.year}-{today.month:02d}"

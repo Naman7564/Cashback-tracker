@@ -28,13 +28,18 @@ async function api(path, opts = {}) {
     return res.json();
 }
 
+let analyticsPeriod = 'month';
+let isAnalyticsAnimating = false;
+
 // ──── Navigation ────
 function navigate(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     // ponytail: kill old stagger classes before display:block restarts CSS animations
     const target = document.getElementById(`page-${page}`);
-    target.querySelectorAll('.stagger').forEach(el => el.classList.remove('stagger'));
-    target.classList.add('active');
+    if (target) {
+        target.querySelectorAll('.stagger').forEach(el => el.classList.remove('stagger'));
+        target.classList.add('active');
+    }
     currentPage = page;
     history.pushState({ page }, '', page === 'home' ? '/' : `/${page}/`);
     updateTabBar();
@@ -42,7 +47,7 @@ function navigate(page) {
     if (page === 'home') loadDashboard();
     else if (page === 'todo') loadTodo();
     else if (page === 'cards') loadSources();
-    else if (page === 'offers') loadOffers();
+    else if (page === 'analytics') triggerAnalyticsLoad();
     else if (page === 'transactions') loadTransactions();
     window.scrollTo(0, 0);
 }
@@ -58,15 +63,17 @@ window.addEventListener('popstate', (e) => {
     const page = e.state?.page || pathToPage();
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(`page-${page}`);
-    target.querySelectorAll('.stagger').forEach(el => el.classList.remove('stagger'));
-    target.classList.add('active');
+    if (target) {
+        target.querySelectorAll('.stagger').forEach(el => el.classList.remove('stagger'));
+        target.classList.add('active');
+    }
     currentPage = page;
     updateTabBar();
 });
 
 function pathToPage() {
     const p = location.pathname.replace(/\//g, '');
-    return ['todo', 'cards', 'offers', 'transactions'].includes(p) ? p : 'home';
+    return ['todo', 'cards', 'analytics', 'transactions'].includes(p) ? p : 'home';
 }
 
 // ──── Bottom Sheet System ────
@@ -752,62 +759,163 @@ async function toggleSource(id, active) {
     }
 }
 
-// ──── Offers ────
-async function loadOffers() {
-    try {
-        const data = await api('offers/?is_active=true');
-        const offers = data.results || data;
-        const today = new Date().toISOString().split('T')[0];
-        const sevenDays = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
-        const expiring = offers.filter(o => o.valid_until <= sevenDays && o.valid_until >= today);
-        const rest = offers.filter(o => o.valid_until > sevenDays);
-
-        const expiringSection = document.getElementById('expiring-section');
-        const expiringList = document.getElementById('expiring-offers');
-        if (expiring.length) {
-            expiringSection.classList.remove('hidden');
-            expiringList.innerHTML = expiring.map((o, i) =>
-                `${i > 0 ? '<div class="glass-sep ml-4"></div>' : ''}${offerRow(o, true)}`
-            ).join('');
-        } else {
-            expiringSection.classList.add('hidden');
-        }
-
-        const offerList = document.getElementById('offer-list');
-        if (rest.length) {
-            offerList.innerHTML = rest.map((o, i) =>
-                `${i > 0 ? '<div class="glass-sep ml-4"></div>' : ''}${offerRow(o)}`
-            ).join('');
-        } else if (!expiring.length) {
-            offerList.innerHTML = emptyState('tag', 'No active offers');
-        } else {
-            offerList.innerHTML = '';
-        }
-    } catch (e) {
-        console.error('Offers load failed:', e);
-    }
+// ──── Analytics ────
+function setAnalyticsPeriod(period) {
+    analyticsPeriod = period;
+    document.querySelectorAll('.analytics-period-pill').forEach(btn => {
+        const isActive = btn.dataset.period === period;
+        btn.classList.toggle('bg-indigo-500/80', isActive);
+        btn.classList.toggle('text-white', isActive);
+        btn.classList.toggle('bg-white/5', !isActive);
+        btn.classList.toggle('text-slate-400', !isActive);
+        btn.classList.toggle('border', !isActive);
+        btn.classList.toggle('border-white/5', !isActive);
+    });
+    haptic(10);
+    loadAnalytics(false);
 }
 
-function offerRow(o, isExpiring = false) {
-    const value = o.offer_type === 'percentage' ? `${o.value}%` : `₹${fmt(o.value)}`;
-    const cap = o.max_cap ? ` (max ₹${fmt(o.max_cap)})` : '';
-    const days = Math.ceil((new Date(o.valid_until) - new Date()) / 86400000);
-    const expiry = isExpiring
-        ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">${days}d left</span>`
-        : `<span class="text-[13px] text-slate-500">until ${new Date(o.valid_until).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>`;
+function triggerAnalyticsLoad() {
+    if (isAnalyticsAnimating) return;
+    isAnalyticsAnimating = true;
+    loadAnalytics(true);
+}
 
-    return `
-        <div class="flex items-center px-4 py-3.5 press active:bg-white/10 transition-colors" onclick="editOffer(${o.id})">
-            <div class="flex-1 min-w-0">
-                <p class="text-[16px] font-semibold text-white">${esc(o.category)}</p>
-                <p class="text-[13px] text-slate-400 mt-0.5">${esc(o.source_name || '')}</p>
-            </div>
-            <div class="text-right ml-3 flex-shrink-0">
-                <p class="text-[16px] font-semibold text-indigo-400">${value}${cap}</p>
-                ${expiry}
-            </div>
-            <svg class="w-4 h-4 text-slate-600 ml-1.5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
-        </div>`;
+async function loadAnalytics(animate = true) {
+    try {
+        const data = await api(`analytics/?period=${analyticsPeriod}`);
+
+        // Update header subtitle
+        const sub = document.getElementById('analytics-subtitle');
+        if (sub) {
+            const labels = {
+                month: 'This Month', last_month: 'Last Month',
+                quarter: 'Last 3 Months', year: 'This Year', all: 'All Time'
+            };
+            sub.textContent = labels[analyticsPeriod] || 'Overview';
+        }
+
+        // Overview Cards
+        const totalEl = document.getElementById('analytics-total-earned');
+        if (totalEl) totalEl.textContent = `₹${fmt(data.total_earned)}`;
+
+        const bestDot = document.getElementById('analytics-best-dot');
+        const bestName = document.getElementById('analytics-best-name');
+        const bestAmt = document.getElementById('analytics-best-amount');
+        if (data.best_source) {
+            if (bestDot) bestDot.style.background = data.best_source.color;
+            if (bestName) bestName.textContent = data.best_source.name;
+            if (bestAmt) bestAmt.textContent = `₹${fmt(data.best_source.amount)}`;
+        } else {
+            if (bestName) bestName.textContent = '—';
+            if (bestAmt) bestAmt.textContent = '₹0';
+        }
+
+        // Daily Trend Chart
+        const dailyContainer = document.getElementById('analytics-daily-chart');
+        if (dailyContainer) {
+            const maxVal = Math.max(...data.daily_trend.map(d => d.earned), 1);
+            dailyContainer.innerHTML = data.daily_trend.map(d => {
+                const pct = Math.max((d.earned / maxVal) * 100, 4);
+                return `
+                    <div class="flex-1 flex flex-col items-center h-full justify-end group relative">
+                        <div class="w-full bg-gradient-to-t from-indigo-600 to-violet-500 rounded-t transition-all duration-500" style="height:${pct}%;"></div>
+                    </div>`;
+            }).join('');
+        }
+
+        // Donut Chart
+        const donutSvg = document.getElementById('analytics-donut-segments');
+        const donutTotal = document.getElementById('analytics-donut-total');
+        const donutLegend = document.getElementById('analytics-donut-legend');
+
+        if (donutTotal) donutTotal.textContent = `₹${fmt(data.total_earned)}`;
+
+        if (donutSvg && data.source_breakdown.length) {
+            let cumulativePct = 0;
+            donutSvg.innerHTML = data.source_breakdown.map(s => {
+                const strokeDash = `${s.percentage * 2.387} 238.7`;
+                const strokeOffset = -cumulativePct * 2.387;
+                cumulativePct += s.percentage;
+                return `<circle cx="50" cy="50" r="38" fill="none" stroke="${s.color}" stroke-width="12" stroke-dasharray="${strokeDash}" stroke-dashoffset="${strokeOffset}" class="transition-all duration-700" />`;
+            }).join('');
+        } else if (donutSvg) {
+            donutSvg.innerHTML = `<circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="12" />`;
+        }
+
+        if (donutLegend) {
+            donutLegend.innerHTML = data.source_breakdown.map(s => `
+                <div class="flex items-center justify-between text-[13px]">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2.5 h-2.5 rounded-full" style="background:${s.color}"></div>
+                        <span class="text-white font-medium">${esc(s.source)}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-white font-semibold">₹${fmt(s.amount)}</span>
+                        <span class="text-slate-400 text-[11px] ml-1">(${s.percentage}%)</span>
+                    </div>
+                </div>`).join('') || `<p class="text-[13px] text-slate-500 text-center">No data for this period</p>`;
+        }
+
+        // Top Sources
+        const topContainer = document.getElementById('analytics-top-sources');
+        if (topContainer) {
+            const topMax = data.top_sources.length ? data.top_sources[0].amount : 1;
+            topContainer.innerHTML = data.top_sources.map(s => {
+                const widthPct = Math.max((s.amount / topMax) * 100, 5);
+                return `
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[13px]">
+                            <div class="flex items-center gap-2">
+                                <span class="text-slate-400 font-semibold text-[11px]">#${s.rank}</span>
+                                <div class="w-2.5 h-2.5 rounded-full" style="background:${s.color}"></div>
+                                <span class="text-white font-medium">${esc(s.name)}</span>
+                            </div>
+                            <span class="text-white font-semibold">₹${fmt(s.amount)}</span>
+                        </div>
+                        <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-500" style="width:${widthPct}%; background:${s.color}"></div>
+                        </div>
+                    </div>`;
+            }).join('') || `<p class="text-[13px] text-slate-500 text-center">No sources found</p>`;
+        }
+
+        // Monthly Comparison
+        const monthlyContainer = document.getElementById('analytics-monthly-chart');
+        if (monthlyContainer) {
+            const mMax = Math.max(...data.monthly_comparison.map(m => m.earned), 1);
+            monthlyContainer.innerHTML = data.monthly_comparison.map((m, i) => {
+                const pct = Math.max((m.earned / mMax) * 100, 4);
+                const isCurrent = i === data.monthly_comparison.length - 1;
+                const bgClass = isCurrent ? 'bg-gradient-to-t from-indigo-600 to-violet-500' : 'bg-white/20';
+                return `
+                    <div class="flex-1 flex flex-col items-center h-full justify-end gap-1.5">
+                        <div class="w-full ${bgClass} rounded-t transition-all duration-500" style="height:${pct}%;"></div>
+                        <span class="text-[11px] ${isCurrent ? 'text-indigo-300 font-bold' : 'text-slate-400'}">${m.month}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        // Stagger animation gate
+        if (animate) {
+            const cards = document.querySelectorAll('.analytics-card');
+            cards.forEach((card, idx) => {
+                card.classList.remove('stagger');
+                void card.offsetWidth; // trigger reflow
+                card.style.animationDelay = `${idx * 50}ms`;
+                card.classList.add('stagger');
+            });
+            setTimeout(() => {
+                isAnalyticsAnimating = false;
+            }, cards.length * 50 + 350);
+        } else {
+            isAnalyticsAnimating = false;
+        }
+
+    } catch (e) {
+        console.error('Analytics load failed:', e);
+        isAnalyticsAnimating = false;
+    }
 }
 
 // ──── Source Options (for dropdowns) ────

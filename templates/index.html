@@ -228,26 +228,86 @@
         </main>
     </div>
 
-    <!-- ===== OFFERS PAGE ===== -->
-    <div id="page-offers" class="page relative z-10">
-        <header class="sticky top-0 z-20" style="padding-top: env(safe-area-inset-top, 0px);">
-            <div class="bg-black/30 backdrop-blur-xl border-b border-white/5 px-5 py-3 flex justify-between items-center">
-                <h1 class="text-[22px] font-bold text-white">Offers</h1>
-                <button onclick="openSheet('sheet-offer')" class="text-indigo-400 text-[15px] font-medium press">+ Add</button>
+    <!-- ===== ANALYTICS PAGE ===== -->
+    <div id="page-analytics" class="page relative z-10">
+        <header class="sticky top-0 z-20 bg-black/40 backdrop-blur-xl border-b border-white/5" style="padding-top: env(safe-area-inset-top, 0px);">
+            <div class="px-5 py-3 flex justify-between items-center">
+                <div>
+                    <h1 class="text-[28px] font-bold text-white tracking-tight">Analytics</h1>
+                    <p id="analytics-subtitle" class="text-[13px] text-slate-400">August 2026</p>
+                </div>
+            </div>
+            <!-- Period Selector -->
+            <div class="px-5 pb-3 flex gap-2 overflow-x-auto no-scrollbar" id="analytics-period-selector">
+                <button onclick="setAnalyticsPeriod('month')" class="analytics-period-pill flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all press active bg-indigo-500/80 text-white" data-period="month">This Month</button>
+                <button onclick="setAnalyticsPeriod('last_month')" class="analytics-period-pill flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all press bg-white/5 text-slate-400 border border-white/5" data-period="last_month">Last Month</button>
+                <button onclick="setAnalyticsPeriod('quarter')" class="analytics-period-pill flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all press bg-white/5 text-slate-400 border border-white/5" data-period="quarter">Last 3 Months</button>
+                <button onclick="setAnalyticsPeriod('year')" class="analytics-period-pill flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all press bg-white/5 text-slate-400 border border-white/5" data-period="year">This Year</button>
+                <button onclick="setAnalyticsPeriod('all')" class="analytics-period-pill flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all press bg-white/5 text-slate-400 border border-white/5" data-period="all">All Time</button>
             </div>
         </header>
-        <main class="px-4 py-4 pb-28">
-            <div id="expiring-section" class="mb-4 hidden">
-                <h2 class="text-[12px] font-semibold uppercase tracking-wider text-amber-400 mb-2">Expiring Soon</h2>
-                <div id="expiring-offers" class="glass rounded-3xl overflow-hidden ring-1 ring-white/10"></div>
-            </div>
-            <div>
-                <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Active Offers</h2>
-                <div id="offer-list" class="glass rounded-3xl overflow-hidden ring-1 ring-white/10">
-                    <div class="py-12 text-center">
-                        <svg class="w-12 h-12 mx-auto text-slate-600 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/></svg>
-                        <p class="text-[17px] font-semibold text-slate-400">No active offers</p>
+
+        <main class="px-4 py-4 space-y-4 pb-28">
+            <!-- A. Overview Cards (Horizontal Scroll) -->
+            <div class="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                <div class="analytics-card flex-shrink-0 w-[200px] glass rounded-3xl p-4 ring-1 ring-white/10">
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Total Earned</p>
+                    <p id="analytics-total-earned" class="text-[26px] font-bold text-emerald-400 mt-1">₹0</p>
+                </div>
+                <div class="analytics-card flex-shrink-0 w-[220px] glass rounded-3xl p-4 ring-1 ring-white/10">
+                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Best Source</p>
+                    <div class="flex items-center gap-2 mt-2">
+                        <div id="analytics-best-dot" class="w-2.5 h-2.5 rounded-full bg-indigo-500 flex-shrink-0"></div>
+                        <p id="analytics-best-name" class="text-[16px] font-bold text-white truncate">—</p>
                     </div>
+                    <p id="analytics-best-amount" class="text-[13px] text-emerald-400 font-semibold mt-0.5">₹0</p>
+                </div>
+            </div>
+
+            <!-- B. Daily Trend Chart -->
+            <div class="analytics-card glass rounded-3xl p-5 ring-1 ring-white/10">
+                <p class="text-[13px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Daily Trend</p>
+                <div id="analytics-daily-chart" class="h-40 flex items-end gap-1.5 pt-4 pb-2">
+                    <!-- Dynamic Bars -->
+                </div>
+                <div class="flex justify-between text-[11px] text-slate-500 border-t border-white/5 pt-2 mt-1">
+                    <span>Day 1</span>
+                    <span>Day 15</span>
+                    <span>End</span>
+                </div>
+            </div>
+
+            <!-- C. Source Breakdown (Donut) -->
+            <div class="analytics-card glass rounded-3xl p-5 ring-1 ring-white/10">
+                <p class="text-[13px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Source Breakdown</p>
+                <div class="flex items-center justify-center my-2 relative">
+                    <svg id="analytics-donut-svg" class="w-44 h-44 transform -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12" />
+                        <g id="analytics-donut-segments"></g>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                        <span class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total</span>
+                        <span id="analytics-donut-total" class="text-[18px] font-bold text-white">₹0</span>
+                    </div>
+                </div>
+                <div id="analytics-donut-legend" class="space-y-2 mt-4 pt-3 border-t border-white/5">
+                    <!-- Dynamic Legend -->
+                </div>
+            </div>
+
+            <!-- D. Top Sources List -->
+            <div class="analytics-card glass rounded-3xl p-5 ring-1 ring-white/10">
+                <p class="text-[13px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Top Sources</p>
+                <div id="analytics-top-sources" class="space-y-3">
+                    <!-- Dynamic List -->
+                </div>
+            </div>
+
+            <!-- E. Monthly Comparison Chart -->
+            <div class="analytics-card glass rounded-3xl p-5 ring-1 ring-white/10">
+                <p class="text-[13px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Monthly Comparison</p>
+                <div id="analytics-monthly-chart" class="h-36 flex items-end justify-between gap-2 pt-4 pb-2">
+                    <!-- Dynamic Monthly Bars -->
                 </div>
             </div>
         </main>
@@ -337,14 +397,15 @@
                     </svg>
                     <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Cards</span>
                 </button>
-                <!-- Offers -->
-                <button onclick="navigate('offers')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="offers">
+                <!-- Analytics -->
+                <button onclick="navigate('analytics')" class="nav-tab relative flex flex-col items-center min-w-[64px] py-1 transition-all duration-200" data-page="analytics">
                     <div class="nav-pill absolute top-0 w-11 h-11 rounded-2xl transition-all duration-200 opacity-0"></div>
                     <svg class="w-6 h-6 nav-icon relative z-10 mt-1.5 transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 4h5.5a1 1 0 01.7.3l8.5 8.5a1 1 0 010 1.4l-5.5 5.5a1 1 0 01-1.4 0L3.3 11.2A1 1 0 013 10.5V5a1 1 0 011-1z"/>
-                        <circle cx="7" cy="8" r="1"/>
+                        <line x1="18" y1="20" x2="18" y2="10"/>
+                        <line x1="12" y1="20" x2="12" y2="4"/>
+                        <line x1="6" y1="20" x2="6" y2="14"/>
                     </svg>
-                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Offers</span>
+                    <span class="nav-label text-[10px] font-medium relative z-10 mt-0.5 transition-colors duration-200">Analytics</span>
                 </button>
             </div>
         </div>

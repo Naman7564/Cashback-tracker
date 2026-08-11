@@ -12,6 +12,7 @@ urlpatterns = [
     path('', include(router.urls)),
     path('calculate-cashback/', views.calculate_cashback),
     path('dashboard-stats/', views.dashboard_stats),
+    path('analytics/', views.analytics_data),
     path('todo/', views.todo_list),
     path('todo/record/', views.todo_record),
     path('export/csv/', views.export_csv),
