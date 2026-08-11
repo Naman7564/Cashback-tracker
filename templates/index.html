@@ -124,20 +124,16 @@
             <div class="stagger relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-500/20 via-violet-500/15 to-purple-500/10 backdrop-blur-2xl border border-white/15 p-6 shadow-lg shadow-black/20">
                 <!-- Decorative orb -->
                 <div class="absolute -right-8 -top-8 w-40 h-40 bg-indigo-500/30 rounded-full blur-3xl pointer-events-none"></div>
-                <p class="text-[13px] font-semibold uppercase tracking-wider text-indigo-300">Pending Cashback</p>
-                <p id="stat-pending" class="text-[42px] font-bold text-white tracking-tight mt-1 relative z-10 bg-clip-text">₹0</p>
+                <p class="text-[13px] font-semibold uppercase tracking-wider text-indigo-300">Total Cashback</p>
+                <p id="stat-total" class="text-[42px] font-bold text-white tracking-tight mt-1 relative z-10 bg-clip-text">₹0</p>
             </div>
             <!-- Stat Pills -->
-            <div class="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-                <div class="stagger glass rounded-2xl px-4 py-3 flex-shrink-0 min-w-[120px] ring-1 ring-white/10">
-                    <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Earned</p>
-                    <p id="stat-earned" class="text-[20px] font-bold text-emerald-400 mt-1">₹0</p>
-                </div>
-                <div class="stagger glass rounded-2xl px-4 py-3 flex-shrink-0 min-w-[100px] ring-1 ring-white/10">
+            <div class="grid grid-cols-2 gap-3 pb-1">
+                <div class="stagger glass rounded-2xl px-4 py-3 ring-1 ring-white/10">
                     <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Sources</p>
                     <p id="stat-sources" class="text-[20px] font-bold text-white mt-1">0</p>
                 </div>
-                <div class="stagger glass rounded-2xl px-4 py-3 flex-shrink-0 min-w-[120px] ring-1 ring-white/10">
+                <div class="stagger glass rounded-2xl px-4 py-3 ring-1 ring-white/10">
                     <p class="text-[12px] font-semibold uppercase tracking-wider text-slate-400">Best</p>
                     <p id="stat-best" class="text-[20px] font-bold text-white mt-1 truncate">—</p>
                 </div>

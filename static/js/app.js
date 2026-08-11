@@ -163,8 +163,7 @@ async function loadDashboard() {
     try {
         const data = await api('dashboard-stats/');
         // Animate numbers
-        animateCounter(document.getElementById('stat-pending'), data.pending_cashback);
-        animateCounter(document.getElementById('stat-earned'), data.earned_this_month);
+        animateCounter(document.getElementById('stat-total'), data.total_cashback);
         const sourcesEl = document.getElementById('stat-sources');
         sourcesEl.textContent = data.active_sources;
         document.getElementById('stat-best').textContent = data.best_source || '—';

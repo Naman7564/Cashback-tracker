@@ -118,6 +118,10 @@ def dashboard_stats(request):
     today = date.today()
     month = f"{today.year}-{today.month:02d}"
 
+    total_cashback = Transaction.objects.aggregate(
+        total=Sum(Coalesce('actual_cashback', 'expected_cashback', Value(0), output_field=DecimalField()))
+    )['total'] or 0
+
     pending = Transaction.objects.filter(status='pending').aggregate(
         total=Sum('expected_cashback'))['total'] or 0
 
@@ -136,6 +140,7 @@ def dashboard_stats(request):
     recent = Transaction.objects.select_related('source').prefetch_related('upi_numbers')[:5]
 
     return Response({
+        'total_cashback': float(total_cashback),
         'pending_cashback': float(pending),
         'earned_this_month': float(earned_this_month),
         'active_sources': active_sources,
