@@ -501,6 +501,9 @@ async function quickStatus(id, status) {
 }
 
 // ──── Sources ────
+let deletingSourceId = null;
+let activeSwipedSourceCard = null;
+
 async function loadSources() {
     try {
         const data = await api('sources/');
@@ -511,6 +514,7 @@ async function loadSources() {
             return;
         }
         container.innerHTML = allSources.map((s, i) => sourceCard(s, i)).join('');
+        initSourceSwipeHandlers();
     } catch (e) {
         console.error('Sources load failed:', e);
     }
@@ -518,25 +522,222 @@ async function loadSources() {
 
 function sourceCard(s, idx) {
     const typeLabel = { credit: 'Credit', debit: 'Debit', upi: 'UPI' }[s.source_type] || s.source_type;
+    const txnCount = s.transaction_count || 0;
     return `
-        <div class="stagger glass rounded-3xl p-5 ring-1 ring-white/10 mb-3 press bg-gradient-to-br from-white/10 to-white/5" style="animation-delay:${idx * 50}ms" onclick="editSource(${s.id})">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-3 h-3 rounded-full glow-dot" style="background:${s.color};box-shadow:0 0 10px ${s.color}88;"></div>
-                    <div>
-                        <p class="text-[18px] font-bold text-white">${esc(s.name)}</p>
-                        <p class="text-[13px] text-slate-400 mt-0.5">${esc(s.provider)} · ${typeLabel}${s.network ? ' · ' + s.network : ''}</p>
-                    </div>
-                </div>
-                <button onclick="event.stopPropagation();toggleSource(${s.id},${!s.is_active})"
-                    class="w-12 h-7 rounded-full relative transition-colors ${s.is_active ? 'bg-emerald-500' : 'bg-slate-600'}">
-                    <div class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${s.is_active ? 'left-[22px]' : 'left-0.5'}"></div>
+        <div class="swipe-source-row relative overflow-hidden rounded-3xl mb-3 stagger" style="animation-delay:${idx * 50}ms" data-source-id="${s.id}">
+            <!-- Red Delete Action Layer -->
+            <div class="absolute inset-0 bg-rose-600 rounded-3xl flex items-center justify-end pr-6 z-0">
+                <button type="button" onclick="openDeleteSourceConfirm(${s.id}, '${esc(s.name)}', ${txnCount})" class="flex items-center gap-1.5 text-white font-semibold text-[15px] h-full pl-6 press">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Delete
                 </button>
             </div>
-            <div class="mt-3 flex gap-2">
-                <span class="text-[12px] font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">Earned ₹${fmt(s.total_earned || 0)}</span>
+            <!-- Card Content Layer -->
+            <div class="swipe-source-content rounded-3xl p-5 ring-1 ring-white/10 press bg-slate-900/95 backdrop-blur-2xl relative z-10 transition-transform duration-200" onclick="handleSourceCardClick(event, ${s.id})">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-full glow-dot" style="background:${s.color};box-shadow:0 0 10px ${s.color}88;"></div>
+                        <div>
+                            <p class="text-[18px] font-bold text-white">${esc(s.name)}</p>
+                            <p class="text-[13px] text-slate-400 mt-0.5">${esc(s.provider)} · ${typeLabel}${s.network ? ' · ' + s.network : ''}</p>
+                        </div>
+                    </div>
+                    <button onclick="event.stopPropagation();toggleSource(${s.id},${!s.is_active})"
+                        class="toggle-switch-btn w-12 h-7 rounded-full relative transition-colors ${s.is_active ? 'bg-emerald-500' : 'bg-slate-600'}">
+                        <div class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${s.is_active ? 'left-[22px]' : 'left-0.5'}"></div>
+                    </button>
+                </div>
+                <div class="mt-3 flex gap-2">
+                    <span class="text-[12px] font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">Earned ₹${fmt(s.total_earned || 0)}</span>
+                </div>
             </div>
         </div>`;
+}
+
+function handleSourceCardClick(e, sourceId) {
+    const row = e.currentTarget.closest('.swipe-source-row');
+    if (row && row.dataset.isSwiped === 'true') {
+        closeSourceSwipe(row);
+        return;
+    }
+    if (e.target.closest('.toggle-switch-btn')) return;
+    editSource(sourceId);
+}
+
+function closeSourceSwipe(row) {
+    if (!row) return;
+    const content = row.querySelector('.swipe-source-content');
+    if (content) {
+        content.style.transition = 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)';
+        content.style.transform = 'translateX(0px)';
+        content.style.boxShadow = '';
+    }
+    delete row.dataset.isSwiped;
+    if (activeSwipedSourceCard === row) activeSwipedSourceCard = null;
+}
+
+function initSourceSwipeHandlers() {
+    const container = document.getElementById('source-list');
+    if (!container) return;
+
+    let startX = 0, startY = 0, currentX = 0, isDragging = false, activeRow = null, isHorizontalSwipe = null;
+    const revealWidth = 90;
+    const threshold = 80;
+
+    container.addEventListener('touchstart', (e) => {
+        const toggleBtn = e.target.closest('.toggle-switch-btn');
+        if (toggleBtn) return;
+
+        const row = e.target.closest('.swipe-source-row');
+        if (!row) return;
+
+        if (activeSwipedSourceCard && activeSwipedSourceCard !== row) {
+            closeSourceSwipe(activeSwipedSourceCard);
+        }
+
+        activeRow = row;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        currentX = 0;
+        isDragging = true;
+        isHorizontalSwipe = null;
+
+        const content = row.querySelector('.swipe-source-content');
+        if (content) content.style.transition = 'none';
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (!isDragging || !activeRow) return;
+
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        const dx = touchX - startX;
+        const dy = touchY - startY;
+
+        if (isHorizontalSwipe === null) {
+            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+                isHorizontalSwipe = Math.abs(dx) > Math.abs(dy);
+            }
+        }
+
+        if (isHorizontalSwipe === false) {
+            isDragging = false;
+            return;
+        }
+
+        if (!isHorizontalSwipe) return;
+
+        if (e.cancelable) e.preventDefault();
+
+        const alreadySwiped = activeRow.dataset.isSwiped === 'true';
+        let rawOffset = (alreadySwiped ? -revealWidth : 0) + dx;
+
+        // Prevent dragging right past 0
+        if (rawOffset > 0) rawOffset = 0;
+
+        let finalOffset = rawOffset;
+        if (Math.abs(rawOffset) > revealWidth) {
+            const extra = Math.abs(rawOffset) - revealWidth;
+            // Elastic resistance curve
+            const resisted = extra / (1 + extra * 0.015);
+            finalOffset = -(revealWidth + resisted);
+        }
+
+        currentX = finalOffset;
+        const content = activeRow.querySelector('.swipe-source-content');
+        if (content) {
+            content.style.transform = `translateX(${finalOffset}px)`;
+            content.style.boxShadow = finalOffset < 0 ? '0 10px 25px -5px rgba(0,0,0,0.5)' : '';
+        }
+    }, { passive: false });
+
+    const endSwipe = () => {
+        if (!isDragging || !activeRow) return;
+        isDragging = false;
+
+        const content = activeRow.querySelector('.swipe-source-content');
+        if (content) {
+            content.style.transition = 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)';
+            if (Math.abs(currentX) >= threshold) {
+                content.style.transform = `translateX(-${revealWidth}px)`;
+                content.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.5)';
+                activeRow.dataset.isSwiped = 'true';
+                activeSwipedSourceCard = activeRow;
+            } else {
+                content.style.transform = 'translateX(0px)';
+                content.style.boxShadow = '';
+                delete activeRow.dataset.isSwiped;
+                if (activeSwipedSourceCard === activeRow) activeSwipedSourceCard = null;
+            }
+        }
+        activeRow = null;
+    };
+
+    container.addEventListener('touchend', endSwipe);
+    container.addEventListener('touchcancel', endSwipe);
+}
+
+// Close swiped card on outside tap
+document.addEventListener('touchstart', (e) => {
+    if (activeSwipedSourceCard && !e.target.closest('.swipe-source-row')) {
+        closeSourceSwipe(activeSwipedSourceCard);
+    }
+});
+
+// Delete Confirmation & Execution
+function openDeleteSourceConfirm(id, name, txnCount) {
+    deletingSourceId = id;
+    document.getElementById('delete-source-title').textContent = `Delete ${name}?`;
+    const subtitle = txnCount > 0
+        ? `This will also remove ${txnCount} transaction${txnCount === 1 ? '' : 's'} linked to this source.`
+        : 'No transactions linked.';
+    document.getElementById('delete-source-subtitle').textContent = subtitle;
+    openSheet('sheet-delete-source');
+}
+
+async function confirmDeleteSource() {
+    if (!deletingSourceId) return;
+    const sourceId = deletingSourceId;
+    closeSheet('sheet-delete-source');
+
+    const row = document.querySelector(`.swipe-source-row[data-source-id="${sourceId}"]`);
+    try {
+        await api(`sources/${sourceId}/`, { method: 'DELETE' });
+        haptic(20);
+        toast('Payment source deleted');
+        allSources = allSources.filter(s => s.id !== sourceId);
+
+        if (row) {
+            row.style.transition = 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.3s ease-out, margin 0.35s ease-out, max-height 0.35s ease-out';
+            row.style.transform = 'translateX(-100%)';
+            row.style.opacity = '0';
+            row.style.maxHeight = row.offsetHeight + 'px';
+
+            setTimeout(() => {
+                row.style.maxHeight = '0px';
+                row.style.marginTop = '0px';
+                row.style.marginBottom = '0px';
+                row.style.paddingTop = '0px';
+                row.style.paddingBottom = '0px';
+            }, 200);
+
+            setTimeout(() => {
+                row.remove();
+                if (!document.querySelectorAll('.swipe-source-row').length) {
+                    loadSources();
+                }
+            }, 450);
+        } else {
+            loadSources();
+        }
+
+        if (currentPage === 'home') loadDashboard();
+    } catch (e) {
+        haptic([50, 50, 50]);
+        toast('Failed to delete source', true);
+    } finally {
+        deletingSourceId = null;
+    }
 }
 
 async function toggleSource(id, active) {

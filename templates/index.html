@@ -662,6 +662,22 @@
         </div>
     </div>
 
+    <!-- ===== DELETE CONFIRMATION SHEET ===== -->
+    <div id="sheet-delete-source" class="fixed inset-0 z-50 hidden">
+        <div class="sheet-backdrop absolute inset-0" onclick="closeSheet('sheet-delete-source')"></div>
+        <div class="sheet-panel absolute bottom-0 left-0 right-0 max-w-lg mx-auto rounded-t-[32px] bg-slate-900/90 backdrop-blur-2xl border-t border-white/10 p-6" style="padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);">
+            <div class="flex justify-center -mt-2 pb-4 sheet-handle cursor-grab">
+                <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+            </div>
+            <h2 id="delete-source-title" class="text-[20px] font-bold text-white text-center">Delete Source?</h2>
+            <p id="delete-source-subtitle" class="text-[14px] text-slate-400 text-center mt-2"></p>
+            <div class="flex gap-3 mt-6">
+                <button type="button" onclick="closeSheet('sheet-delete-source')" class="flex-1 py-3.5 rounded-2xl glass font-semibold text-white press">Cancel</button>
+                <button type="button" id="btn-confirm-delete-source" onclick="confirmDeleteSource()" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-rose-500 font-semibold text-white press shadow-lg shadow-rose-500/25">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== TOAST ===== -->
     <div id="toast" class="fixed left-4 right-4 glass-strong px-4 py-3 rounded-2xl text-[15px] font-medium shadow-lg z-[60] hidden max-w-lg mx-auto transition-all transform -translate-y-2 opacity-0 text-white" style="top: calc(env(safe-area-inset-top, 0px) + 8px);">
     </div>

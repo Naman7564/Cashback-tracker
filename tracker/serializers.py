@@ -11,6 +11,7 @@ class UPINumberSerializer(serializers.ModelSerializer):
 
 class PaymentSourceSerializer(serializers.ModelSerializer):
     total_earned = serializers.SerializerMethodField()
+    transaction_count = serializers.SerializerMethodField()
     upi_numbers = UPINumberSerializer(many=True, read_only=True)
 
     class Meta:
@@ -21,6 +22,9 @@ class PaymentSourceSerializer(serializers.ModelSerializer):
         total = obj.transactions.filter(status='received').aggregate(
             total=db_models.Sum('actual_cashback'))['total']
         return float(total or 0)
+
+    def get_transaction_count(self, obj):
+        return obj.transactions.count()
 
 
 class OfferSerializer(serializers.ModelSerializer):
