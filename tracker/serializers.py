@@ -50,7 +50,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_source_name_display(self, obj):
-        return obj.source_name or (obj.source.name if obj.source else '')
+        return (obj.source.name if obj.source else '') or obj.source_name or 'Transaction'
 
     def get_source_color(self, obj):
         return obj.source.color if obj.source else '#64748b'
