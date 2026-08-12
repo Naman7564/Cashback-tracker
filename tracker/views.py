@@ -2,7 +2,7 @@ import csv
 import json
 import os
 import shutil
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from django.conf import settings
 from django.http import HttpResponse, FileResponse
@@ -475,9 +475,10 @@ def todo_record(request):
 
     txn = Transaction.objects.create(
         source=source,
-        amount=Decimal(str(amount)),
-        merchant=merchant or source.name,
+        source_name=merchant or source.name,
+        transaction_type=source.source_type,
         category=category,
+        amount=Decimal(str(amount)),
         expected_cashback=Decimal(str(cashback_amount)),
         actual_cashback=Decimal(str(cashback_amount)),
         status='received',

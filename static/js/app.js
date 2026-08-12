@@ -391,7 +391,7 @@ async function recordTodoTransaction() {
         haptic(20);
         closeSheet('sheet-todo-record');
         toast(`₹${fmt(cashback)} recorded from ${esc(todoSourceData.source.name)}`);
-        if (navigator.vibrate) navigator.vibrate(10);
+        haptic(10);
         loadTodo();
         // Always refresh dashboard so Home recent transactions stay current
         loadDashboard();
@@ -940,8 +940,10 @@ async function loadSourceOptions() {
 // ──── Auto Cashback Calc ────
 function setupCashbackCalc() {
     ['txn-source', 'txn-amount'].forEach(id => {
-        document.getElementById(id).addEventListener('input', debouncedCalc);
-        document.getElementById(id).addEventListener('change', debouncedCalc);
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', debouncedCalc);
+        el.addEventListener('change', debouncedCalc);
     });
 }
 
@@ -1393,7 +1395,11 @@ async function executeRestore() {
 
 // ──── Haptic Feedback ────
 function haptic(pattern) {
-    if ('vibrate' in navigator) navigator.vibrate(pattern);
+    try {
+        if ('vibrate' in navigator && typeof navigator.vibrate === 'function') {
+            navigator.vibrate(pattern);
+        }
+    } catch (e) { /* ignore browser policy restriction */ }
 }
 
 // ──── Toast ────
