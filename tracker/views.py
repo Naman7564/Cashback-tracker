@@ -4,6 +4,7 @@ import os
 import shutil
 from datetime import date, timedelta
 from decimal import Decimal
+from django.utils import timezone
 from django.conf import settings
 from django.http import HttpResponse, FileResponse
 from django.db import transaction as db_transaction
@@ -228,7 +229,7 @@ def calculate_cashback(request):
         return Response({'error': 'source_id and amount required'}, status=status.HTTP_400_BAD_REQUEST)
 
     amount = Decimal(str(amount))
-    today = date.today()
+    today = timezone.localdate()
     offers = Offer.objects.filter(
         source_id=source_id, is_active=True,
         valid_from__lte=today, valid_until__gte=today,
@@ -267,7 +268,7 @@ def analytics_data(request):
     if cached_res:
         return Response(cached_res)
 
-    today = date.today()
+    today = timezone.localdate()
 
     qs = Transaction.objects.all()
 
@@ -399,7 +400,7 @@ def dashboard_stats(request):
     if cached_res:
         return Response(cached_res)
 
-    today = date.today()
+    today = timezone.localdate()
     month = f"{today.year}-{today.month:02d}"
 
     total_cashback = Transaction.objects.aggregate(
@@ -450,7 +451,7 @@ class UPINumberViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 def todo_list(request):
     """Get all sources with daily target and earned-so-far for a given date."""
-    target_date = request.query_params.get('date', str(date.today()))
+    target_date = request.query_params.get('date', str(timezone.localdate()))
     cache_key = f"todo:{target_date}"
     cached_res = cache.get(cache_key)
     if cached_res:
@@ -498,7 +499,7 @@ def todo_record(request):
     merchant = request.data.get('merchant', '')
     cashback_amount = request.data.get('cashback_amount', 0)
     upi_number_ids = request.data.get('upi_number_ids', [])
-    txn_date = request.data.get('date', str(date.today()))
+    txn_date = request.data.get('date', str(timezone.localdate()))
     category = request.data.get('category', '')
 
     if not source_id or not amount:

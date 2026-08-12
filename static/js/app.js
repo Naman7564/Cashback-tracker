@@ -8,7 +8,13 @@ let allSources = [];
 let calcTimer = null;
 let txnDateRange = 'month'; // today|week|month|all
 let expandedTxnId = null;
-let todoDate = new Date().toISOString().split('T')[0];
+function getISTDateStr(dateObj = new Date()) {
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000) + istOffset);
+    return istDate.toISOString().split('T')[0];
+}
+
+let todoDate = getISTDateStr();
 let todoSourceData = null; // currently open source in record modal
 let todoData = null; // cached todo list response
 
@@ -88,7 +94,7 @@ function openSheet(id) {
     });
     if (id === 'sheet-transaction' || id === 'sheet-offer') loadSourceOptions();
     if (id === 'sheet-transaction' && !document.getElementById('txn-edit-id').value) {
-        document.getElementById('txn-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('txn-date').value = getISTDateStr();
     }
 }
 
@@ -193,13 +199,15 @@ async function loadDashboard() {
 function buildDateSelector() {
     const container = document.getElementById('date-selector');
     if (!container) return;
-    const today = new Date();
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const todayIST = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
     let pills = '';
     for (let i = 0; i < 7; i++) {
-        const d = new Date(today);
+        const d = new Date(todayIST);
         d.setDate(d.getDate() - i);
         const val = d.toISOString().split('T')[0];
-        const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
         const active = val === todoDate;
         pills += `<button onclick="selectTodoDate('${val}')" class="flex-shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold transition-all press ${active ? 'bg-indigo-500/80 text-white' : 'bg-white/5 text-slate-400 border border-white/5'}">${label}</button>`;
     }
