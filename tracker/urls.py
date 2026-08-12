@@ -19,4 +19,5 @@ urlpatterns = [
     path('export/json/', views.export_json),
     path('backup/download/', views.backup_download),
     path('backup/restore/', views.backup_restore),
+    path('admin/clear-cache/', views.clear_cache),
 ]

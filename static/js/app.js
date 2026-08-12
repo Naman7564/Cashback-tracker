@@ -1393,6 +1393,17 @@ async function executeRestore() {
     }
 }
 
+async function clearAppCache() {
+    try {
+        await api('admin/clear-cache/', { method: 'POST' });
+        haptic(20);
+        toast('Cache cleared');
+    } catch (e) {
+        haptic([50, 50, 50]);
+        toast('Failed to clear cache', true);
+    }
+}
+
 // ──── Haptic Feedback ────
 function haptic(pattern) {
     try {

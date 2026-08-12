@@ -19,6 +19,16 @@ from .serializers import (
 )
 
 
+from django.core.cache import cache
+
+@api_view(['POST'])
+def clear_cache(request):
+    try:
+        cache.clear()
+        return Response({'message': 'Cache cleared successfully'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['GET'])
 def export_csv(request):
     response = HttpResponse(content_type='text/csv')
@@ -149,6 +159,16 @@ class PaymentSourceViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_active=is_active.lower() == 'true')
         return qs
 
+    def list(self, request, *args, **kwargs):
+        is_active = request.query_params.get('is_active')
+        cache_key = f"sources:list:{is_active}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+        res = super().list(request, *args, **kwargs)
+        cache.set(cache_key, res.data, timeout=300)
+        return res
+
 
 class OfferViewSet(viewsets.ModelViewSet):
     queryset = Offer.objects.select_related('source').all()
@@ -242,6 +262,11 @@ def calculate_cashback(request):
 @api_view(['GET'])
 def analytics_data(request):
     period = request.query_params.get('period', 'month')
+    cache_key = f"analytics:{period}"
+    cached_res = cache.get(cache_key)
+    if cached_res:
+        return Response(cached_res)
+
     today = date.today()
 
     qs = Transaction.objects.all()
@@ -354,7 +379,7 @@ def analytics_data(request):
         lm = first - timedelta(days=1)
         period_str = f"{lm.year}-{lm.month:02d}"
 
-    return Response({
+    res_data = {
         'period': period_str,
         'total_earned': float(total_earned),
         'best_source': best_source_data,
@@ -362,11 +387,18 @@ def analytics_data(request):
         'source_breakdown': source_breakdown,
         'top_sources': top_sources,
         'monthly_comparison': monthly_comparison
-    })
+    }
+    cache.set(cache_key, res_data, timeout=300)
+    return Response(res_data)
 
 
 @api_view(['GET'])
 def dashboard_stats(request):
+    cache_key = "dashboard:summary"
+    cached_res = cache.get(cache_key)
+    if cached_res:
+        return Response(cached_res)
+
     today = date.today()
     month = f"{today.year}-{today.month:02d}"
 
@@ -391,14 +423,16 @@ def dashboard_stats(request):
 
     recent = Transaction.objects.select_related('source').prefetch_related('upi_numbers')[:5]
 
-    return Response({
+    res_data = {
         'total_cashback': float(total_cashback),
         'pending_cashback': float(pending),
         'earned_this_month': float(earned_this_month),
         'active_sources': active_sources,
         'best_source': best['source__name'] if best else None,
         'recent_transactions': TransactionSerializer(recent, many=True).data,
-    })
+    }
+    cache.set(cache_key, res_data, timeout=60)
+    return Response(res_data)
 
 
 class UPINumberViewSet(viewsets.ModelViewSet):
@@ -417,6 +451,11 @@ class UPINumberViewSet(viewsets.ModelViewSet):
 def todo_list(request):
     """Get all sources with daily target and earned-so-far for a given date."""
     target_date = request.query_params.get('date', str(date.today()))
+    cache_key = f"todo:{target_date}"
+    cached_res = cache.get(cache_key)
+    if cached_res:
+        return Response(cached_res)
+
     sources = PaymentSource.objects.filter(is_active=True).prefetch_related('upi_numbers')
     result = []
     for s in sources:
@@ -441,12 +480,14 @@ def todo_list(request):
     # Overall summary
     total_target = sum(r['daily_target'] for r in result)
     total_earned = sum(r['earned_so_far'] for r in result)
-    return Response({
+    res_data = {
         'date': target_date,
         'total_target': total_target,
         'total_earned': total_earned,
         'sources': result,
-    })
+    }
+    cache.set(cache_key, res_data, timeout=60)
+    return Response(res_data)
 
 
 @api_view(['POST'])
