@@ -6,7 +6,7 @@ let currentPage = 'home';
 let statusFilter = '', monthFilter = '', sourceFilter = '';
 let allSources = [];
 let calcTimer = null;
-let txnDateRange = 'month'; // today|week|month|all
+let txnDateRange = 'today'; // today|week|month|all
 let expandedTxnId = null;
 function getISTDateStr(dateObj = new Date()) {
     const istOffset = 5.5 * 60 * 60 * 1000;
