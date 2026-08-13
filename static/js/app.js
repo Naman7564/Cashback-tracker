@@ -1251,9 +1251,9 @@ function txnExpandableRow(t, idx) {
            </div>`
         : '';
 
-    const cashbackLine = (t.actual_cashback > 0)
+    const merchantLine = (t.actual_cashback > 0)
         ? `<div class="flex gap-4 text-[13px] mt-1">
-            <span class="text-emerald-400">Received: <span class="font-medium">₹${fmt(t.actual_cashback)}</span></span>
+            <span class="text-emerald-400">Merchant: <span class="font-medium">${esc(t.source_name || '-')}</span></span>
            </div>`
         : '';
 
@@ -1287,7 +1287,7 @@ function txnExpandableRow(t, idx) {
                 <svg class="w-4 h-4 text-slate-600 ml-2 flex-shrink-0 transition-transform duration-200 txn-chevron-${t.id}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
             </div>
             <div id="txn-detail-${t.id}" class="hidden px-4 pb-4 pt-0 border-t border-white/5">
-                ${cashbackLine}
+                ${merchantLine}
                 ${upiHtml}
                 ${notesLine}
                 ${actions}
