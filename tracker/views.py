@@ -293,7 +293,7 @@ def analytics_data(request):
     best_source_data = None
     sources_totals = {}
     for t in qs:
-        name = t.source_name or (t.source.name if t.source else 'Other')
+        name = t.source.name if t.source else 'Other'
         color = t.source.color if t.source else '#6366f1'
         cb = t.actual_cashback if (t.status == 'received' and t.actual_cashback is not None) else t.expected_cashback
         cb = float(cb or 0)
