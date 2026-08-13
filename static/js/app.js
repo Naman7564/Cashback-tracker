@@ -260,12 +260,18 @@ function todoSourceCard(item, idx) {
 
     const miniTxns = item.transactions_today.length
         ? `<div class="mt-3 pt-3 border-t border-white/5 space-y-1.5">
-            ${item.transactions_today.map(t => `
+            ${item.transactions_today.map(t => {
+                const isUpi = t.transaction_type === 'upi';
+                const upiText = isUpi
+                    ? esc(t.upi_numbers_detail?.[0]?.upi_id || '—')
+                    : '';
+                return `
                 <div class="flex justify-between text-[13px]">
-                    <span class="text-slate-400">${esc(t.merchant)}</span>
-                    <span class="text-emerald-400 font-medium">+₹${fmt(t.actual_cashback || t.expected_cashback)}</span>
+                    <span class="text-slate-400 text-[13px] truncate">${upiText}</span>
+                    <span class="text-emerald-400 text-[13px]">+₹${fmt(t.actual_cashback || t.expected_cashback)}</span>
                 </div>
-            `).join('')}
+                `;
+            }).join('')}
            </div>`
         : '';
 
