@@ -451,7 +451,14 @@ class UPINumberViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 def todo_list(request):
     """Get all sources with daily target and earned-so-far for a given date."""
-    target_date = request.query_params.get('date', str(timezone.localdate()))
+    target_param = request.query_params.get('date')
+    if not target_param or target_param.lower() == 'today':
+        target_date = str(timezone.localdate())
+    elif target_param.lower() == 'yesterday':
+        target_date = str(timezone.localdate() - timedelta(days=1))
+    else:
+        target_date = target_param
+
     cache_key = f"todo:{target_date}"
     cached_res = cache.get(cache_key)
     if cached_res:
@@ -528,5 +535,9 @@ def todo_record(request):
     )
     if upi_number_ids and source.source_type == 'upi':
         txn.upi_numbers.set(upi_number_ids)
+
+    # Invalidate cached todo and dashboard responses
+    cache.delete(f"todo:{parsed_date}")
+    cache.delete("dashboard:summary")
 
     return Response(TransactionSerializer(txn).data, status=status.HTTP_201_CREATED)

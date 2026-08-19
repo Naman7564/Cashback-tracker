@@ -9,14 +9,69 @@ let calcTimer = null;
 let txnDateRange = 'today'; // today|week|month|all
 let expandedTxnId = null;
 function getISTDateStr(dateObj = new Date()) {
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istDate = new Date(dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000) + istOffset);
-    return istDate.toISOString().split('T')[0];
+    // Return YYYY-MM-DD in Asia/Kolkata timezone
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(dateObj);
 }
 
 let todoDate = getISTDateStr();
+let lastLoadedISTDate = getISTDateStr();
 let todoSourceData = null; // currently open source in record modal
 let todoData = null; // cached todo list response
+let midnightTimer = null;
+
+function getMsUntilISTMidnight() {
+    const istStr = getISTDateStr();
+    const [y, m, d] = istStr.split('-').map(Number);
+    const nextMidnightUtcMs = Date.UTC(y, m - 1, d + 1, 0, 0, 0, 500) - (5.5 * 60 * 60 * 1000);
+    return Math.max(nextMidnightUtcMs - Date.now(), 1000);
+}
+
+function scheduleMidnightReset() {
+    clearTimeout(midnightTimer);
+    const ms = getMsUntilISTMidnight();
+    midnightTimer = setTimeout(() => {
+        const currentIST = getISTDateStr();
+        const wasViewingToday = (todoDate === lastLoadedISTDate);
+        lastLoadedISTDate = currentIST;
+        if (wasViewingToday) {
+            todoDate = currentIST;
+        }
+        if (currentPage === 'todo') {
+            loadTodo(todoDate);
+        } else if (currentPage === 'home') {
+            loadDashboard();
+        }
+        scheduleMidnightReset();
+    }, ms);
+}
+
+function handleVisibilityOrFocus() {
+    if (document.visibilityState === 'visible') {
+        const currentIST = getISTDateStr();
+        const dateChanged = (currentIST !== lastLoadedISTDate);
+        if (dateChanged) {
+            const wasViewingToday = (todoDate === lastLoadedISTDate);
+            lastLoadedISTDate = currentIST;
+            if (wasViewingToday) {
+                todoDate = currentIST;
+            }
+            if (currentPage === 'todo') {
+                loadTodo(todoDate);
+            } else if (currentPage === 'home') {
+                loadDashboard();
+            }
+            scheduleMidnightReset();
+        }
+    }
+}
+
+document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+window.addEventListener('focus', handleVisibilityOrFocus);
 
 // ──── API Helper ────
 async function api(path, opts = {}) {
@@ -200,28 +255,42 @@ function buildDateSelector() {
     const container = document.getElementById('date-selector');
     if (!container) return;
     const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const todayIST = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + istOffset);
     let pills = '';
     for (let i = 0; i < 7; i++) {
-        const d = new Date(todayIST);
-        d.setDate(d.getDate() - i);
-        const val = d.toISOString().split('T')[0];
+        // Calculate date offset using UTC timestamp to avoid local timezone skew
+        const d = new Date(now.getTime() - (i * 86400000));
+        const val = getISTDateStr(d);
         const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
         const active = val === todoDate;
-        pills += `<button onclick="selectTodoDate('${val}')" class="flex-shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold transition-all press ${active ? 'bg-indigo-500/80 text-white' : 'bg-white/5 text-slate-400 border border-white/5'}">${label}</button>`;
+        pills += `<button type="button" data-date="${val}" class="date-pill flex-shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold min-h-[44px] inline-flex items-center justify-center cursor-pointer select-none transition-all active:scale-95 active:bg-indigo-600 ${active ? 'bg-indigo-500/80 text-white' : 'bg-white/5 text-slate-400 border border-white/5'}">${label}</button>`;
     }
     container.innerHTML = pills;
+}
+
+function handleDatePillActivation(e) {
+    const pill = e.target.closest('.date-pill');
+    if (!pill) return;
+    const dateStr = pill.dataset.date;
+    if (!dateStr) return;
+    if (e.type === 'touchend') {
+        e.preventDefault(); // Prevent duplicate simulated click
+    }
+    selectTodoDate(dateStr);
 }
 
 function selectTodoDate(dateStr) {
     todoDate = dateStr;
     buildDateSelector();
-    loadTodo();
+    loadTodo(dateStr);
     haptic(10);
 }
 
-async function loadTodo() {
+async function loadTodo(dateToLoad = null) {
+    if (dateToLoad) {
+        todoDate = dateToLoad;
+    } else if (!todoDate) {
+        todoDate = getISTDateStr();
+    }
     buildDateSelector();
     try {
         const data = await api(`todo/?date=${todoDate}`);
@@ -1498,5 +1567,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setupCashbackCalc();
     checkStandalone();
 
+    // Attach fast-click / touch handlers for date selector pills
+    const dateSelector = document.getElementById('date-selector');
+    if (dateSelector) {
+        dateSelector.addEventListener('click', handleDatePillActivation);
+        dateSelector.addEventListener('touchend', handleDatePillActivation);
+    }
+
+    scheduleMidnightReset();
     setStatusFilter('');
 });
