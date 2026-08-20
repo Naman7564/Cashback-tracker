@@ -20,16 +20,6 @@ from .serializers import (
 )
 
 
-from django.core.cache import cache
-
-@api_view(['POST'])
-def clear_cache(request):
-    try:
-        cache.clear()
-        return Response({'message': 'Cache cleared successfully'})
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 @api_view(['GET'])
 def export_csv(request):
     response = HttpResponse(content_type='text/csv')
@@ -160,16 +150,6 @@ class PaymentSourceViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_active=is_active.lower() == 'true')
         return qs
 
-    def list(self, request, *args, **kwargs):
-        is_active = request.query_params.get('is_active')
-        cache_key = f"sources:list:{is_active}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return Response(cached)
-        res = super().list(request, *args, **kwargs)
-        cache.set(cache_key, res.data, timeout=300)
-        return res
-
 
 class OfferViewSet(viewsets.ModelViewSet):
     queryset = Offer.objects.select_related('source').all()
@@ -263,10 +243,6 @@ def calculate_cashback(request):
 @api_view(['GET'])
 def analytics_data(request):
     period = request.query_params.get('period', 'month')
-    cache_key = f"analytics:{period}"
-    cached_res = cache.get(cache_key)
-    if cached_res:
-        return Response(cached_res)
 
     today = timezone.localdate()
 
@@ -389,17 +365,11 @@ def analytics_data(request):
         'top_sources': top_sources,
         'monthly_comparison': monthly_comparison
     }
-    cache.set(cache_key, res_data, timeout=300)
     return Response(res_data)
 
 
 @api_view(['GET'])
 def dashboard_stats(request):
-    cache_key = "dashboard:summary"
-    cached_res = cache.get(cache_key)
-    if cached_res:
-        return Response(cached_res)
-
     today = timezone.localdate()
     month = f"{today.year}-{today.month:02d}"
 
@@ -432,7 +402,6 @@ def dashboard_stats(request):
         'best_source': best['source__name'] if best else None,
         'recent_transactions': TransactionSerializer(recent, many=True).data,
     }
-    cache.set(cache_key, res_data, timeout=60)
     return Response(res_data)
 
 
@@ -458,11 +427,6 @@ def todo_list(request):
         target_date = str(timezone.localdate() - timedelta(days=1))
     else:
         target_date = target_param
-
-    cache_key = f"todo:{target_date}"
-    cached_res = cache.get(cache_key)
-    if cached_res:
-        return Response(cached_res)
 
     sources = PaymentSource.objects.filter(is_active=True).prefetch_related('upi_numbers')
     result = []
@@ -494,7 +458,6 @@ def todo_list(request):
         'total_earned': total_earned,
         'sources': result,
     }
-    cache.set(cache_key, res_data, timeout=60)
     return Response(res_data)
 
 
@@ -535,9 +498,5 @@ def todo_record(request):
     )
     if upi_number_ids and source.source_type == 'upi':
         txn.upi_numbers.set(upi_number_ids)
-
-    # Invalidate cached todo and dashboard responses
-    cache.delete(f"todo:{parsed_date}")
-    cache.delete("dashboard:summary")
 
     return Response(TransactionSerializer(txn).data, status=status.HTTP_201_CREATED)
